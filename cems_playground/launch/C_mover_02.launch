@@ -1,0 +1,9 @@
+<launch>
+
+    <!--include file="$(find franka_example_controllers)/launch/joint_position_example_controller_sim.launch" -->
+
+    <node name="test_move_node" pkg="test_pkg01" type="C_mover_03.py">
+        <param name="joint_move_dist" value="0.01" />
+        <param name="command_topic" value="/joint_position_example_controller_sim/joint_command" />
+    </node>
+</launch>

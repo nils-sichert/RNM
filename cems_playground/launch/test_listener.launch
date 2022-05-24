@@ -1,0 +1,5 @@
+<launch>
+    <include file="$(find franka_example_controllers)/launch/joint_position_example_controller_sim.launch" />
+
+    <node name="test_listener" pkg="test_pkg01" type="test_listener.py" output="screen"/>
+</launch>
