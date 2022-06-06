@@ -34,10 +34,12 @@
     <group if="$(arg with_rviz)">
 	<node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find franka_visualization)/launch/franka_visualization.rviz"/>
     </group>
-    <node name="test_move_node" pkg="panda_joint_reader" type="test_move.py">
+    
+    <!-- <node name="trajectory_player" pkg="kinematic_robot" type="trajectory_planer.py">
         <param name="joint_move_dist" value="10" />
         <param name="command_topic" value="/joint_position_example_controller_sim/joint_command" />
-    </node>
+    </node> -->
 
 </launch>
+
 

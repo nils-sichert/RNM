@@ -26,12 +26,12 @@ class kinematic:
 
     def direct_kinematic(self, theta):
         A_Mat = self.get_A(theta)
-        position = A_Mat[9:12]
-        orientation = np.reshape(A_Mat[0:9], (3,3))
+        # position = A_Mat[9:12]
+        # orientation = np.reshape(A_Mat[0:9], (3,3))
 
-        return position, orientation, A_Mat
+        return A_Mat #,position, orientation
     
-    def inverse_kinematic(self, theta, A_current, A_target, step=0.01, err_Tol=1e-2):
+    def inverse_kinematic(self, theta, A_current, A_target, step=0.01, err_Tol=1e-3):
         # input: q = current thetas, ... /TODO
         delta_A = (A_target-A_current)
         while np.abs(delta_A).max() > err_Tol:
@@ -45,7 +45,6 @@ class kinematic:
             
             A_current = self.get_A(theta)
             delta_A = (A_target - A_current)
-            print(delta_A)
         return theta
 
     def get_A(self, theta):
