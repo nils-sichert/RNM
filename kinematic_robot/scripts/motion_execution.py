@@ -35,6 +35,9 @@ class motion_execution:
         msg.data = angle
         self.publisher.publish(msg)
         self.counter += 1
+        #/TODO Error handling nessesary! If list index higher than last length, resend last entrie (hold state)
+        #/TODO exit get_list only once
+        #/TODO robot join-limit handler
     
     def send_command(self):
         # send single command
@@ -42,22 +45,25 @@ class motion_execution:
 
     def get_position_error(self):
         # calcualte position error. If to high, stop execution and wati for reaching target
-        #/TODO Winkel in Liste schreiben und Zwischenschritte interpolieren
-
+        #/TODO compare actual state with target state, if error to high do not send new angles, instead send last target angles
         pass
 
     def get_list(self):
         path = self.trajectory_planer.creat_path()
         return path
+    
+    def get_flag_list(self):
+        # if / else flag, replace existing list
+        pass
+
+    def set_flag_newlist(self):
+        #set flag if new list avaible
+        pass
+
 
 
 def main(argv):
     rospy.init_node("motion_executor")
-    # Read parameters specified in the .launch file
-    # The "~" in the beginning means that it will use parameters from the node
-    # e.g. /node_name/parameter_name can then be
-    # read by rospy.get_param("parameter_name", default)
-    # move_dist = rospy.get_param("~joint_move_dist", 10)
     command_topic = rospy.get_param("~command_topic", "/default_command_topic")
 
     #rospy.logwarn("Using topic " + str(command_topic) + " and distance " + str(move_dist))
@@ -67,6 +73,7 @@ def main(argv):
     # Loop infinitely with a fixed frequency of 1000 hz
     rate = rospy.Rate(1000)
     while not rospy.is_shutdown():
+        motion_executor.get_flag_list()
         motion_executor.send_commandlist()
         rate.sleep()
 

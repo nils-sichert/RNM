@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import numpy as np
 from sympy import sin, cos
@@ -10,19 +11,6 @@ class kinematic:
         #/TODO Subscriber aktuelle POSE
         # self.theta_init = np.array([0,0,0,0,0,0,0])#np.array(WINKEL)
         # self.A_init = self.get_A(self.theta_init)#np.array(MATRIX A)
-        
-
-        # defining joint limits for the Panda robot
-        # /TODO Limithandler schreiben
-        # self.limits = [
-        #     (-2.8973, 2.8973),
-        #     (-1.7628, 1.7628),
-        #     (-2.8973, 2.8973),
-        #     (-3.0718, -0.0698),
-        #     (-2.8973, 2.8973),
-        #     (-0.0175, 3.7525),
-        #     (-2.8973, 2.8973)
-        # ]
 
     def direct_kinematic(self, theta):
         A_Mat = self.get_A(theta)
@@ -35,7 +23,6 @@ class kinematic:
         # input: q = current thetas, ... /TODO
         delta_A = (A_target-A_current)
         while np.abs(delta_A).max() > err_Tol:
-            delta_A = (A_target - A_current)
             J_theta = self.get_J(theta)
             
             # multiplying by step_size to interpolate between current and target pose
@@ -93,10 +80,10 @@ class kinematic:
 if __name__ == '__main__':
     kinemati = kinematic()
     theta_init = np.array([0,0,0,0,0,0,0])
-    pos, orient, a = kinemati.direct_kinematic(theta_init)
+    a = kinemati.direct_kinematic(theta_init)
     A_current = a
     theta_target = np.array([np.deg2rad(5), np.deg2rad(5), np.deg2rad(5), np.deg2rad(5), np.deg2rad(5), np.deg2rad(5),np.deg2rad(5)])
-    pos_target, orient_target, a_target = kinemati.direct_kinematic(theta_target)
+    a_target = kinemati.direct_kinematic(theta_target)
     A_target = a_target
     print(A_target)
     q_ik = kinemati.inverse_kinematic(theta_target, A_current, A_target)
