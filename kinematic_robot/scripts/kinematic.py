@@ -1,8 +1,9 @@
 
 #!/usr/bin/env python3
 import numpy as np
-from sympy import sin, cos
+from numpy import sin, cos
 from rospy import Subscriber
+from sympy import lambdify
 
 class kinematic:
     def __init__(self):
@@ -33,6 +34,18 @@ class kinematic:
             A_current = self.get_A(theta)
             delta_A = (A_target - A_current)
         return theta
+
+    def get_A_2(self, theta_target):
+        # current_trigo: sin and cos of actual theta's
+        
+        cos_target  = [np.cos(q) for q in theta_target]
+        sin_target  = [np.sin(q) for q in theta_target]
+         
+        A_lamb_explicit = lambda _0,_1: (lambda c1,c2,c3,c4,c5,c6,c7,s1,s2,s3,s4,s5,s6,s7: (np.array([[c1*(c2*(c3*(c4*(c5*c6*c7 + s5*s7) - c7*s4*s6) + s3*(c5*s7 - c6*c7*s5)) + s2*(c4*c7*s6 + s4*(c5*c6*c7 + s5*s7))) - s1*(-c3*(c5*s7 - c6*c7*s5) + s3*(c4*(c5*c6*c7 + s5*s7) - c7*s4*s6))], [c1*(-c3*(c5*s7 - c6*c7*s5) + s3*(c4*(c5*c6*c7 + s5*s7) - c7*s4*s6)) + s1*(c2*(c3*(c4*(c5*c6*c7 + s5*s7) - c7*s4*s6) + s3*(c5*s7 - c6*c7*s5)) + s2*(c4*c7*s6 + s4*(c5*c6*c7 + s5*s7)))], [c2*(c4*c7*s6 + s4*(c5*c6*c7 + s5*s7)) - s2*(c3*(c4*(c5*c6*c7 + s5*s7) - c7*s4*s6) + s3*(c5*s7 - c6*c7*s5))], [c1*(c2*(c3*(c4*(-c5*c6*s7 + c7*s5) + s4*s6*s7) + s3*(c5*c7 + c6*s5*s7)) + s2*(-c4*s6*s7 + s4*(-c5*c6*s7 + c7*s5))) - s1*(-c3*(c5*c7 + c6*s5*s7) + s3*(c4*(-c5*c6*s7 + c7*s5) + s4*s6*s7))], [c1*(-c3*(c5*c7 + c6*s5*s7) + s3*(c4*(-c5*c6*s7 + c7*s5) + s4*s6*s7)) + s1*(c2*(c3*(c4*(-c5*c6*s7 + c7*s5) + s4*s6*s7) + s3*(c5*c7 + c6*s5*s7)) + s2*(-c4*s6*s7 + s4*(-c5*c6*s7 + c7*s5)))], [c2*(-c4*s6*s7 + s4*(-c5*c6*s7 + c7*s5)) - s2*(c3*(c4*(-c5*c6*s7 + c7*s5) + s4*s6*s7) + s3*(c5*c7 + c6*s5*s7))], [c1*(c2*(c3*(c4*c5*s6 + c6*s4) - s3*s5*s6) + s2*(-c4*c6 + c5*s4*s6)) - s1*(c3*s5*s6 + s3*(c4*c5*s6 + c6*s4))], [c1*(c3*s5*s6 + s3*(c4*c5*s6 + c6*s4)) + s1*(c2*(c3*(c4*c5*s6 + c6*s4) - s3*s5*s6) + s2*(-c4*c6 + c5*s4*s6))], [c2*(-c4*c6 + c5*s4*s6) - s2*(c3*(c4*c5*s6 + c6*s4) - s3*s5*s6)], [c1*(c2*(c3*(c4*c5*(0.088*c6 + 0.107*s6) - 0.0825*c4 - s4*(-0.107*c6 + 0.088*s6 + 0.384)) + 0.0825*c3 - s3*s5*(0.088*c6 + 0.107*s6)) + s2*(c4*(-0.107*c6 + 0.088*s6 + 0.384) + c5*s4*(0.088*c6 + 0.107*s6) - 0.0825*s4 + 0.316)) - s1*(c3*s5*(0.088*c6 + 0.107*s6) + s3*(c4*c5*(0.088*c6 + 0.107*s6) - 0.0825*c4 - s4*(-0.107*c6 + 0.088*s6 + 0.384)) + 0.0825*s3)], [c1*(c3*s5*(0.088*c6 + 0.107*s6) + s3*(c4*c5*(0.088*c6 + 0.107*s6) - 0.0825*c4 - s4*(-0.107*c6 + 0.088*s6 + 0.384)) + 0.0825*s3) + s1*(c2*(c3*(c4*c5*(0.088*c6 + 0.107*s6) - 0.0825*c4 - s4*(-0.107*c6 + 0.088*s6 + 0.384)) + 0.0825*c3 - s3*s5*(0.088*c6 + 0.107*s6)) + s2*(c4*(-0.107*c6 + 0.088*s6 + 0.384) + c5*s4*(0.088*c6 + 0.107*s6) - 0.0825*s4 + 0.316))], [c2*(c4*(-0.107*c6 + 0.088*s6 + 0.384) + c5*s4*(0.088*c6 + 0.107*s6) - 0.0825*s4 + 0.316) - s2*(c3*(c4*c5*(0.088*c6 + 0.107*s6) - 0.0825*c4 - s4*(-0.107*c6 + 0.088*s6 + 0.384)) + 0.0825*c3 - s3*s5*(0.088*c6 + 0.107*s6)) + 0.333]])))(_0[0],_0[1],_0[2],_0[3],_0[4],_0[5],_0[6],_1[0],_1[1],_1[2],_1[3],_1[4],_1[5],_1[6])
+        A = np.array(A_lamb_explicit(cos_target, sin_target))
+        A = A[:,0]
+
+        return A
 
     def get_A(self, theta):
         # current_trigo: sin and cos of actual theta's
@@ -90,6 +103,7 @@ if __name__ == '__main__':
     theta_init = np.array([0,0,0,0,0,0,0])
     a = kinemati.direct_kinematic(theta_init)
     A_current = a
+
     theta_target = np.array([np.deg2rad(5), np.deg2rad(5), np.deg2rad(5), np.deg2rad(5), np.deg2rad(5), np.deg2rad(5),np.deg2rad(5)])
     a_target = kinemati.direct_kinematic(theta_target)
     A_target = a_target
@@ -99,4 +113,28 @@ if __name__ == '__main__':
 
     profiler.disable()
     stats = pstats.Stats(profiler).sort_stats('cumtime')
-    stats.print_stats()
+    stats.print_stats(20)
+
+
+    # Result of code profiling
+    # Unsurprisingly get_J and get_A consume most of the time
+    #
+    #   ncalls    tottime  percall cumtime  percall filename:lineno(function)
+    #         1     0.004    0.004   40.103   40.103 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:22(inverse_kinematic)
+    #        55     0.984    0.018   23.418    0.426 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:58(get_J)
+    # 140479/137910 1.821    0.000   19.936    0.000 /home/rnm/.local/lib/python3.8/site-packages/sympy/core/decorators.py:58(__sympifyit_wrapper)
+    #        57     0.206    0.004   16.862    0.296 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:37(get_A)
+    # 26056/17553   0.486    0.000   14.918    0.001 /home/rnm/.local/lib/python3.8/site-packages/sympy/core/cache.py:67(wrapper)
+    #     16447     0.424    0.000   14.187    0.001 /home/rnm/.local/lib/python3.8/site-packages/sympy/core/decorators.py:224(_func)
+    #     94532     2.559    0.000    9.720    0.000 /home/rnm/.local/lib/python3.8/site-packages/sympy/core/numbers.py:1293(__mul__)
+    #
+    # After mod
+    #     ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    #         1    0.007    0.007    0.200    0.200 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:23(inverse_kinematic)
+    #        55    0.002    0.000    0.085    0.002 <__array_function__ internals>:2(pinv)
+    #    279/59    0.007    0.000    0.084    0.001 {built-in method numpy.core._multiarray_umath.implement_array_function}
+    #        55    0.077    0.001    0.082    0.001 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:71(get_J)
+    #        55    0.012    0.000    0.081    0.001 /usr/lib/python3/dist-packages/numpy/linalg/linalg.py:1890(pinv)
+    #        55    0.002    0.000    0.034    0.001 <__array_function__ internals>:2(svd)
+    #        55    0.016    0.000    0.030    0.001 /usr/lib/python3/dist-packages/numpy/linalg/linalg.py:1468(svd)
+    #        57    0.022    0.000    0.024    0.000 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:50(get_A)
