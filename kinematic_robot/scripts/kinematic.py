@@ -78,6 +78,14 @@ class kinematic:
 # for testing an debugging
 
 if __name__ == '__main__':
+
+    # For profiling
+    import cProfile, pstats
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+
+    
     kinemati = kinematic()
     theta_init = np.array([0,0,0,0,0,0,0])
     a = kinemati.direct_kinematic(theta_init)
@@ -88,3 +96,7 @@ if __name__ == '__main__':
     print(A_target)
     q_ik = kinemati.inverse_kinematic(theta_target, A_current, A_target)
     print(q_ik)
+
+    profiler.disable()
+    stats = pstats.Stats(profiler).sort_stats('cumtime')
+    stats.print_stats()
