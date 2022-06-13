@@ -1,3 +1,5 @@
+# TODO: Seeing "DH_creator.py", is this file obsolete? If so, please move to archive or delete.
+
 from sympy import symbols, init_printing, Matrix, eye, sin, cos, pi, lambdify
 
 q1, q2, q3, q4, q5, q6, q7 = symbols('theta_1 theta_2 theta_3 theta_4 theta_5 theta_6 theta_7')
