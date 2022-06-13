@@ -22,6 +22,7 @@ class kinematic:
     
     def inverse_kinematic(self, theta, A_current, A_target, step=0.01, err_Tol=1e-3):
         # input: q = current thetas, ... /TODO
+       
         delta_A = (A_target-A_current)
         while np.abs(delta_A).max() > err_Tol:
             J_theta = self.get_J(theta)
@@ -31,8 +32,10 @@ class kinematic:
             delta_theta = np.matmul(np.linalg.pinv(J_theta), delta_A*step)
             theta = theta + delta_theta
             
-            A_current = self.get_A(theta)
+            A_current = self.get_A_2(theta)
             delta_A = (A_target - A_current)
+        
+        #theta = [1,1,1,1,1,1]
         return theta
 
     def get_A_2(self, theta_target):
