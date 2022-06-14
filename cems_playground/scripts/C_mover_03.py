@@ -132,16 +132,16 @@ def main(argv):
     rospy.logwarn("Using topic " + str(command_topic) + " and distance " + str(move_dist))
     robot_arm = CRobotArm(move_dist, command_topic, joint_state_topic)
 
-    target_angles_deg = [60, -45, -30, 40, 50, 60, 70]
+    target_angles_deg = [-60, 45, -30, 40, 50, 60, 70]
     target_angles_rad = [v * np.pi / 180 for v in target_angles_deg]
 
-    robot_arm.test_moveList()
+    #robot_arm.move_to_angles_smoother(target_angles_rad)
 
     # Loop infinitely with a fixed frequency of 1000 hz
     rate = rospy.Rate(1000)
     while not rospy.is_shutdown():
         #robot_arm.wiggle_dat_bot()
-        #robot_arm.move_to_angles_smoother(target_angles_rad)
+        robot_arm.move_to_angles_smoother(target_angles_rad)
         rate.sleep()
 
 
