@@ -1,5 +1,8 @@
 
 #!/usr/bin/env python3
+
+#TODO Delete this file if obsolete -> see robot_kinematics.py
+
 from xml.sax import default_parser_list
 import numpy as np
 from numpy import sin, cos
