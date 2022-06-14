@@ -59,8 +59,8 @@ class robot_kinematics:
         
 
         # Settings for divergence detection 
-        n_last_entries  = 3                 # n past entries used for detection
-        n_allowed_fails = 10                # n consequtive iterations that are allowed before abortion
+        n_last_entries  = 20                 # n past entries used for detection
+        n_allowed_fails = 100                # n consequtive iterations that are allowed before abortion
 
 
         delta_list_sqsum    = []            # Sum of squared delta_A entries
@@ -72,7 +72,7 @@ class robot_kinematics:
         delta_A = (A_target - A_current)
         theta   = theta_init
 
-        while np.abs(delta_A).max() > err_tol:
+        while np.linalg.norm(delta_A) > err_tol:
             # TODO: Replace abortion criteria with cartesian equivalent
             J_theta = self.get_J(theta)
             
@@ -114,19 +114,20 @@ class robot_kinematics:
         
         # Show delta stats progress
         if self.debug:
-            iteration   = range(len(delta_list_sqsum))
+            iteration1   = range(len(delta_list_sqsum))
+            iteration2   = range(len(delta_list_max))
 
             fig, ax1    = plt.subplots()
             ax1.set_xlabel('Iteration')
             ax1.set_ylabel('Squared sum error')
-            ax1.plot(iteration, delta_list_sqsum, color='blue', label='Squared sum')
+            ax1.plot(iteration1, delta_list_sqsum, color='blue', label='Squared sum')
             l1, label1  = ax1.get_legend_handles_labels()
             ax1.tick_params(axis='y', labelcolor='blue')
             ax1.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
 
             ax2         = ax1.twinx()
             ax2.set_ylabel('Maximum error')
-            ax2.plot(iteration, delta_list_max, color="red", label='Maximum')
+            ax2.plot(iteration2, delta_list_max, color="red", label='Maximum')
             l2, label2  = ax2.get_legend_handles_labels()
             ax2.tick_params(axis='y', labelcolor='red')
             ax2.ticklabel_format(axis='y', style='sci', scilimits=(0,0))

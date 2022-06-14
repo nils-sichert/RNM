@@ -14,8 +14,10 @@ from trajectory_planer import trajectory_planer
 tmp = os.path.dirname(__file__)
 
 class path_planner:
-    def _init_(self):
+    def __init__(self):
         self.movement_speed = 0.05/1000 #[m/s]
+        self.robot_kinematics = robot_kinematics()
+        self.max_dist_between_stutzpunkten = 0.05
 
     def get_path_list_cartesian(self):
             path_list = []
@@ -29,7 +31,7 @@ class path_planner:
         path_list = self.get_path_list_cartesian()
         # TODO hardcode ersetzten
         current_theta = [0,0,0,0,0,0,0]
-        current_pose = self.robot_kinematic.get_pose_from_angles(current_theta)
+        current_pose = self.robot_kinematics.get_pose_from_angles(current_theta)
         tmp_A_list = []
        
 
@@ -41,24 +43,24 @@ class path_planner:
             counter = int((tmp_dist// self.max_dist_between_stutzpunkten)+1)
             
             for i in range(counter):
-                interpol_pose_tmp = current_pose + i/counter*delta_pose
-                interpol_pose = np.concatenate((current_pose, interpol_pose_tmp), axis=None)
+                interpol_pose = current_pose + i/counter*delta_pose
                 tmp_A_list.append(interpol_pose)
             
-            current_pose = np.concatenate((current_pose, next_pose), axis=None)
+            current_pose = next_pose
 
         with open(os.path.join(os.path.dirname(__file__),"Path/planned_path_jointspace.csv"),'r+') as file:
             file.truncate(0)
 
         for i in range(len(tmp_A_list)-1):
             # TODO hardcode ersetzten
-            with open((os.path.join(os.path.dirname(__file___),"Path/planned_path_jointspace.csv")), mode="a", newline="") as f:
+
+            with open((os.path.join(os.path.dirname(__file__),"Path/planned_path_jointspace.csv")), mode="a", newline="") as f:
                 writer = csv.writer(f, delimiter=",")
                 writer.writerow(current_theta)
 
             A_current = tmp_A_list[i]
             A_target = tmp_A_list [i+1]
-            current_theta = self.robot_kinematic.get_angles_from_pose(current_theta,A_current,A_target)
+            current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,A_current,A_target)
 
         return path_list
         
@@ -75,7 +77,7 @@ class path_planner:
         with open(os.path.join(os.path.dirname(__file__),"Path/planned_path_jointspace_1ms.csv"),'r+') as file:
             file.truncate(0)
 
-        current_pose = self.robot_kinematic.get_pose_from_angles(joint_list[0])
+        current_pose = self.robot_kinematics.get_pose_from_angles(joint_list[0])
 
         for i in range(len(joint_list)-1):
             next_pose = joint_list[i+1]
@@ -97,6 +99,7 @@ class path_planner:
         # number of steps need to be calculated, e.g. calculating stepwidth with get_A and divide by max. movement per 1ms
         
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     path_planner = path_planner()
-    path_planner.calculate_path_list_jointspace()
+    #path_planner.calculate_path_list_jointspace()
+    path_planner.sample_path_list_jointspace()
