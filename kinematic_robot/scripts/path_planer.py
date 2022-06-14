@@ -11,7 +11,7 @@ from std_msgs.msg import Float64MultiArray
 import os
 from trajectory_planer import trajectory_planer
 
-tmp = os.path.dirname(_file_)
+tmp = os.path.dirname(__file__)
 
 class path_planner:
     def _init_(self):
@@ -47,12 +47,12 @@ class path_planner:
             
             current_pose = np.concatenate((current_pose, next_pose), axis=None)
 
-        with open(os.path.join(os.path.dirname(_file_),"Path/planned_path_jointspace.csv"),'r+') as file:
+        with open(os.path.join(os.path.dirname(__file__),"Path/planned_path_jointspace.csv"),'r+') as file:
             file.truncate(0)
 
         for i in range(len(tmp_A_list)-1):
             # TODO hardcode ersetzten
-            with open((os.path.join(os.path.dirname(_file_),"Path/planned_path_jointspace.csv")), mode="a", newline="") as f:
+            with open((os.path.join(os.path.dirname(__file___),"Path/planned_path_jointspace.csv")), mode="a", newline="") as f:
                 writer = csv.writer(f, delimiter=",")
                 writer.writerow(current_theta)
 
@@ -66,30 +66,36 @@ class path_planner:
     def sample_path_list_jointspace(self):
         # TODO replace .append!
         joint_list = []
-        with open((os.path.join(os.path.dirname(_file_),"Path/planned_path_cartesian.csv"))) as f:
+        with open((os.path.join(os.path.dirname(__file__),"Path/planned_path_cartesian.csv"))) as f:
                 reader = csv.reader(f, delimiter=",")
                 for row in reader:
                     joint_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
-        return joint_list
+       
 
-        with open(os.path.join(os.path.dirname(_file_),"Path/planned_path_jointspace_1ms.csv"),'r+') as file:
+        with open(os.path.join(os.path.dirname(__file__),"Path/planned_path_jointspace_1ms.csv"),'r+') as file:
             file.truncate(0)
 
         current_pose = self.robot_kinematic.get_pose_from_angles(joint_list[0])
 
         for i in range(len(joint_list)-1):
-        next_pose = joint_list[i+1]
-        dist = np.linalg.norm(next_pose[9:12]-current_pose[9:12])
-        steps = dist/self.movement_speed
+            next_pose = joint_list[i+1]
+            dist = np.linalg.norm(next_pose[9:12]-current_pose[9:12])
+            steps = dist/self.movement_speed
 
-        with open(os.path.join(os.path.dirname(_file_), ""))
-        current_pose = next_pose
+            with open((os.path.join(os.path.dirname(__file__), "")), mode="a", newline="") as f:
+                writer = csv.writer(f, delimiter=",")
+                delta_joints_per_step = (joint_list[i+1] - joint_list[i])/steps
+                for j in range(steps):
+                    sample_joint = joint_list + j*delta_joints_per_step
+                    writer.writerow(sample_joint)
 
+            current_pose = next_pose
 
+        return 0
 
         # method, that interpolates Joint Space into 1ms Step
         # number of steps need to be calculated, e.g. calculating stepwidth with get_A and divide by max. movement per 1ms
-        pass
+        
 
 if _name_ == '_main_':
     path_planner = path_planner()
