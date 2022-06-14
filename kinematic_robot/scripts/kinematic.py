@@ -1,17 +1,21 @@
 
 #!/usr/bin/env python3
+from xml.sax import default_parser_list
 import numpy as np
 from numpy import sin, cos
 from rospy import Subscriber
 from sympy import lambdify
+import matplotlib.pyplot as plt
 
 class kinematic:
-    def __init__(self):
+    def __init__(self, debug=False):
         pass
         # create initial pose
         #/TODO Subscriber aktuelle POSE
         # self.theta_init = np.array([0,0,0,0,0,0,0])#np.array(WINKEL)
         # self.A_init = self.get_A(self.theta_init)#np.array(MATRIX A)
+
+        self.debug = debug
 
     def direct_kinematic(self, theta):
         A_Mat = self.get_A(theta)
@@ -22,8 +26,17 @@ class kinematic:
     
     def inverse_kinematic(self, theta, A_current, A_target, step=0.01, err_Tol=1e-3):
         # input: q = current thetas, ... /TODO
-       
-        delta_A = (A_target-A_current)
+
+        # Settings for divergence detection 
+        n_last_entries  = 3                 # n past entries used for detection
+        n_allowed_fails = 10                # n consequtive iterations that are allowed before abortion
+
+
+        delta_list_sqsum    = []            # Sum of squared delta_A entries
+        delta_list_max      = []            # Max of delta_A matrix
+        n_failed_iterations = 0             # n of failed iterations (non converging)
+        delta_A = (A_target - A_current)
+
         while np.abs(delta_A).max() > err_Tol:
             J_theta = self.get_J(theta)
             
@@ -34,7 +47,60 @@ class kinematic:
             
             A_current = self.get_A_2(theta)
             delta_A = (A_target - A_current)
+
+            # Detect divergence
+            delta_sqsum = sum(delta_A**2)
+            delta_max   = abs(delta_A).max()
+
+            if delta_sqsum >= sum(delta_list_sqsum[-n_last_entries:])/n_last_entries and len(delta_list_sqsum) >= n_last_entries:
+                delta_list_sqsum.append(delta_sqsum)
+                n_failed_iterations += 1
+                print("Warning: IK (square sum) not converging")
+                print(delta_list_sqsum[-5:])
+
+            elif delta_max >= sum(delta_list_max[-n_last_entries:])/n_last_entries and len(delta_list_max) >= n_last_entries:
+                delta_list_max.append(delta_max)
+                n_failed_iterations += 1
+                print("Warning: IK (max value) not converging")
+                print(delta_list_max[-5:])
+
+            else:
+                delta_list_sqsum.append(delta_sqsum)
+                delta_list_max.append(delta_max)
+                n_failed_iterations = 0
+
+            # Detect too many failed consecutive iterations
+            if n_failed_iterations > n_allowed_fails:
+                 print("Warning: Too many failed consecutive iterations. Aborting IK")
+                 self.debug = True      # Enable to show plot
+                 break
+
+            pass
         
+        # Show delta stats progress
+        if self.debug:
+            iteration   = range(len(delta_list_sqsum))
+
+            fig, ax1    = plt.subplots()
+            ax1.set_xlabel('Iteration')
+            ax1.set_ylabel('Squared sum error')
+            ax1.plot(iteration, delta_list_sqsum, color='blue', label='Squared sum')
+            l1, label1  = ax1.get_legend_handles_labels()
+            ax1.tick_params(axis='y', labelcolor='blue')
+            ax1.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+
+            ax2         = ax1.twinx()
+            ax2.set_ylabel('Maximum error')
+            ax2.plot(iteration, delta_list_max, color="red", label='Maximum')
+            l2, label2  = ax2.get_legend_handles_labels()
+            ax2.tick_params(axis='y', labelcolor='red')
+            ax2.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+
+            ax2.legend(l1 + l2, label1 + label2)
+            fig.suptitle('Convergence Behaviour')
+            plt.grid()
+            plt.show()
+
         #theta = [1,1,1,1,1,1]
         return theta
 
@@ -102,7 +168,7 @@ if __name__ == '__main__':
     profiler.enable()
 
     
-    kinemati = kinematic()
+    kinemati = kinematic(debug=True)
     theta_init = np.array([0,0,0,0,0,0,0])
     a = kinemati.direct_kinematic(theta_init)
     A_current = a
