@@ -12,7 +12,7 @@ import numpy as np
 from std_msgs.msg import Float64MultiArray
 from tqdm import tqdm
 
-class trajectory_planer:
+class trajectory_planner:
     def __init__(self):
         
         self.robot_kinematics = robot_kinematics()
@@ -46,5 +46,5 @@ class trajectory_planer:
         return joint_state
 
 if __name__ == '__main__':
-    trajectory_player = trajectory_planer()
+    trajectory_player = trajectory_planner()
     trajectory_player.create_path()

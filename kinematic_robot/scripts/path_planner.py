@@ -9,7 +9,7 @@ import numpy as np
 import csv
 from std_msgs.msg import Float64MultiArray
 import os
-from trajectory_planer import trajectory_planer
+from trajectory_planner import trajectory_planner
 
 tmp = os.path.dirname(__file__)
 
