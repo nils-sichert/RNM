@@ -4,7 +4,7 @@
 source devel/setup.bash
 """
 from math import cos
-from kinematic import kinematic
+from robot_kinematics import robot_kinematics
 import rospy
 import sys
 from sensor_msgs.msg import JointState
@@ -15,10 +15,10 @@ from tqdm import tqdm
 class trajectory_planer:
     def __init__(self):
         
-        self.kinematic = kinematic()
+        self.robot_kinematics = robot_kinematics()
         self.theta_init = self.get_joint_state()
-        self.A_init = self.kinematic.direct_kinematic(self.theta_init)
-        self.A = self.kinematic.direct_kinematic(self.theta_init)
+        self.A_init = self.robot_kinematics.get_pose_from_angles(self.theta_init)
+        self.A = self.robot_kinematics.get_pose_from_angles(self.theta_init)
 
         #debugging parameters
         self.stepsize = 0.001

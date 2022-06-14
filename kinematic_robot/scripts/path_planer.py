@@ -19,7 +19,7 @@ class path_planner:
 
     def get_path_list_cartesian(self):
             path_list = []
-            with open((os.path.join(os.path.dirname(_file_),"Path/planned_path_cartesian.csv"))) as f:
+            with open((os.path.join(os.path.dirname(__file__),"Path/planned_path_cartesian.csv"))) as f:
                 reader = csv.reader(f, delimiter=",")
                 for row in reader:
                     path_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6]),float(row[7]),float(row[8]),float(row[9]),float(row[10]),float(row[11])])
