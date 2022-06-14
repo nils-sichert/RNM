@@ -24,7 +24,7 @@ class trajectory_planer:
         self.stepsize = 0.001
         self.iteration = 100
         
-    def creat_path(self):
+    def create_path(self):
         theta = self.get_joint_state()
         theta_list = []
         for i in tqdm(range(self.iteration), ncols=100):
@@ -47,4 +47,4 @@ class trajectory_planer:
 
 if __name__ == '__main__':
     trajectory_player = trajectory_planer()
-    trajectory_player.creat_path()
+    trajectory_player.create_path()

@@ -24,7 +24,7 @@ class kinematic:
 
         return A_Mat #,position, orientation
     
-    def inverse_kinematic(self, theta, A_current, A_target, step=0.01, err_Tol=1e-3):
+    def inverse_kinematic(self, theta_init, A_current, A_target, step=0.01, err_Tol=1e-3):
         # input: q = current thetas, ... /TODO
 
         # Settings for divergence detection 
@@ -35,17 +35,18 @@ class kinematic:
         delta_list_sqsum    = []            # Sum of squared delta_A entries
         delta_list_max      = []            # Max of delta_A matrix
         n_failed_iterations = 0             # n of failed iterations (non converging)
+        
         delta_A = (A_target - A_current)
+        theta   = theta_init
 
         while np.abs(delta_A).max() > err_Tol:
             J_theta = self.get_J(theta)
             
             # multiplying by step_size to interpolate between current and target pose
-            
             delta_theta = np.matmul(np.linalg.pinv(J_theta), delta_A*step)
             theta = theta + delta_theta
             
-            A_current = self.get_A_2(theta)
+            A_current = self.get_A(theta)
             delta_A = (A_target - A_current)
 
             # Detect divergence
