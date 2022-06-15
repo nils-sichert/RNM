@@ -8,46 +8,70 @@ INPUT: goal pose, current pose
 OUTPUT: goal pose in form of angles
 """
 
-from numpy import cos
-from robot_kinematics import robot_kinematics
-import rospy
-import sys
-from sensor_msgs.msg import JointState
-import numpy as np
 import csv
-from std_msgs.msg import Float64MultiArray
 import os
-from trajectory_planer import trajectory_planer
+import sys
+
+import numpy as np
+import rospy
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray
+
+from path_planner import path_planner
+from robot_kinematics import robot_kinematics
+from trajectory_planner import trajectory_planner
+
 
 tmp = os.path.dirname(__file__)
 
 class motion_manager:
-    def __init__(self, topic_joint_command, topic_joint_states, topic_goal_pose, debug=False):
-
-
-        #self.current_angles     = rospy.wait_for_message(self.joint_state_topic, JointState, rospy.Duration(10)).position
-        self.current_angles = []
+    def __init__(self, topic_joint_command, topic_joint_states, topic_goal_pose, err_tol=1e-3, debug=False):
+        ''' TODO Docstring'''
 
         self.pub_joint_commands = rospy.Publisher(name=topic_joint_command, data_class=Float64MultiArray, queue_size=20)
         self.sub_joint_states   = rospy.Subscriber(name=topic_joint_states, data_class=JointState, callback=self.callback_joint_states, queue_size=10)
         self.sub_goal_pose      = rospy.Subscriber(name=topic_goal_pose, data_class=Float64MultiArray, callback=self.callback_goal_pose, queue_size=10)
 
+        self.trajectory_planner = trajectory_planner()
+        self.path_planner       = path_planner()
+        self.kinematics         = robot_kinematics()
 
 
-        self.command_topic = joint_command_topic
-        self.trajectory_planer = trajectory_planer()
+        self.curr_joint_states  = rospy.wait_for_message(topic_joint_states, JointState, rospy.Duration(10)).position
+        self.curr_goal_pose     = None
+
+        self.err_tolerance      = err_tol
         self.counter = 0
-        self.kinematic = robot_kinematics()
         self.max_dist_between_stutzpunkten = 0.01
 
+
     def callback_joint_states(self, msg_in : JointState):
-        ''' Callback function for the tpoic_joint_states. Stores current angles in object variable'''
+        ''' Callback function for the topic_joint_states. Stores current angles in object variable'''
         self.current_joint_state = msg_in.position
 
     def callback_goal_pose(self, msg_in : Float64MultiArray):
         ''' Callback function for the topic_goal_pose. Stores current goal pose in object variable'''
         self.current_goal_pose = msg_in.data
-        # TODO Input verification -> should be a A matrix
+        # TODO Input verification -> should be an A matrix
+
+    def has_active_goal_pose(self):
+        ''' Returns true if a goal pose has been received and motion manager tries to reach the goal pose.
+            Returns false if no goal pose has been reveiced or goal pose has been reached
+        '''
+
+        if self.curr_goal_pose == None:
+            return False
+        
+        curr_pose   = self.kinematics.get_pose_from_angles(self.curr_joint_states)
+        goal_pose   = self.curr_goal_pose
+        error       = np.linalg.norm(curr_pose[9:12] - goal_pose[9:12])
+
+        if error <= self.err_tolerance:
+            return False
+        else:
+            return True
+        
+
 
     def send_commandlist(self):
         # Create the message and send it to the advertised topic
@@ -88,10 +112,14 @@ class motion_manager:
         # TODO write listplanner
         path = self.trajectory_planer.create_path()
         pass
+
+    
         
 
 
 def main(argv):
+
+    # Init
     rospy.init_node("motion_manager")
     operation_mode      = rospy.get_param("/operation_mode")
     topic_joint_command = rospy.get_param("/topic_joint_command")
@@ -101,13 +129,21 @@ def main(argv):
     rospy.logwarn("Operation Mode " + str(operation_mode))
     manager     = motion_manager(topic_joint_command, topic_joint_states, topic_goal_pose)
 
-    # Loop infinitely with a fixed frequency of 1000 hz
+    # Loop
     rate = rospy.Rate(1000)
     while not rospy.is_shutdown():
+
+        # TODO: Check if manager has active goal pose
+        # TODO: Get path, get trajectory
+        # TODO: Iterate over trajectory list (1kHz)
+
+
         rate.sleep()
         pass
 
+
 if __name__ == '__main__':
+    
     main(sys.argv)
 
 
