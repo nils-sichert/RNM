@@ -32,13 +32,14 @@ class motion_manager:
         self.sub_joint_states   = rospy.Subscriber(name=topic_joint_states, data_class=JointState, callback=self.callback_joint_states, queue_size=10)
         self.sub_goal_pose      = rospy.Subscriber(name=topic_goal_pose, data_class=Float64MultiArray, callback=self.callback_goal_pose, queue_size=10)
 
-        self.trajectory_planner = trajectory_planner()
         self.path_planner       = path_planner()
+        self.trajectory_planner = trajectory_planner()
         self.kinematics         = robot_kinematics()
 
 
         self.curr_joint_states  = rospy.wait_for_message(topic_joint_states, JointState, rospy.Duration(10)).position
         self.curr_goal_pose     = None
+        self.has_a_plan         = False     # Indicates if a motion execution plan is present
 
         self.err_tolerance      = err_tol
         self.counter = 0
@@ -50,13 +51,16 @@ class motion_manager:
         self.current_joint_state = msg_in.position
 
     def callback_goal_pose(self, msg_in : Float64MultiArray):
-        ''' Callback function for the topic_goal_pose. Stores current goal pose in object variable'''
-        self.current_goal_pose = msg_in.data
-        # TODO Input verification -> should be an A matrix
+        ''' Callback function for the topic_goal_pose. Stores current goal pose in object variable 
+            and sets the has_a_plan flag to False
+        '''
+        self.current_goal_pose  = msg_in.data
+        self.has_a_plan         = False
+        # TODO Input verification -> msg_in.data should be a pose matrix
 
     def has_active_goal_pose(self):
-        ''' Returns true if a goal pose has been received and motion manager tries to reach the goal pose.
-            Returns false if no goal pose has been reveiced or goal pose has been reached
+        ''' Returns true if a goal pose has been set and is not reached yet.
+            Returns false if no goal pose has been set or goal pose has been reached
         '''
 
         if self.curr_goal_pose == None:
@@ -133,10 +137,16 @@ def main(argv):
     rate = rospy.Rate(1000)
     while not rospy.is_shutdown():
 
-        # TODO: Check if manager has active goal pose
-        # TODO: Get path, get trajectory
-        # TODO: Iterate over trajectory list (1kHz)
-
+        if manager.has_active_goal_pose():
+            
+            if manager.has_a_plan:
+                # /TODO Follow plan, Iterate over trajectory list (1kHz)
+                pass
+            else:
+                # Get a plan
+                # /TODO Get a path
+                # /TODO Get a trajectory
+                pass
 
         rate.sleep()
         pass
