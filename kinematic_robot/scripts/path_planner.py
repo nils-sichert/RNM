@@ -17,7 +17,7 @@ class path_planner:
     def __init__(self):
         self.movement_speed = 0.05/1000 #[m/s]
         self.robot_kinematics = robot_kinematics()
-        self.max_dist_between_stutzpunkten = 0.05
+        self.max_dist_between_supports = 0.05
 
     def get_path_list_cartesian(self):
             path_list = []
@@ -40,7 +40,7 @@ class path_planner:
             next_pose = np.array(path_list[i])
             delta_pose = next_pose - current_pose
             tmp_dist = np.linalg.norm(delta_pose)
-            counter = int((tmp_dist// self.max_dist_between_stutzpunkten)+1)
+            counter = int((tmp_dist// self.max_dist_between_supports)+1)
             
             for i in range(counter):
                 interpol_pose = current_pose + i/counter*delta_pose
@@ -79,12 +79,13 @@ class path_planner:
 
         current_pose = self.robot_kinematics.get_pose_from_angles(joint_list[0])
 
-        for i in range(len(joint_list)-1):
-            next_pose = joint_list[i+1]
-            dist = np.linalg.norm(next_pose[9:12]-current_pose[9:12])
+        for i in range(len(joint_list) - 1):
+            next_joints = joint_list[i + 1]
+            next_pose = self.robot_kinematics.get_pose_from_angles(next_joints)     # /FIXME confirm correction
+            dist = np.linalg.norm(next_pose[9:12] -  current_pose[9:12])
             steps = dist/self.movement_speed
 
-            with open((os.path.join(os.path.dirname(__file__), "")), mode="a", newline="") as f:
+            with open((os.path.join(os.path.dirname(__file__), "")), mode="a", newline="") as f:    # /FIXME Opens a directory, not a file
                 writer = csv.writer(f, delimiter=",")
                 delta_joints_per_step = (joint_list[i+1] - joint_list[i])/steps
                 for j in range(steps):
