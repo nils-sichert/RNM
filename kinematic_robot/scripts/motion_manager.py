@@ -19,24 +19,26 @@ from std_msgs.msg import Float64MultiArray
 
 from path_planner import path_planner
 from robot_kinematics import robot_kinematics
-from trajectory_planner import trajectory_planner
+from trajectory_planner import TrajectoryPlanner
 
 
 tmp = os.path.dirname(__file__)
 
-class motion_manager:
+class MotionManager:
     def __init__(self, topic_joint_command, topic_joint_states, topic_goal_pose, err_tol=1e-3, debug=False):
         ''' TODO Docstring'''
 
+        # ROS communication
         self.pub_joint_commands = rospy.Publisher(name=topic_joint_command, data_class=Float64MultiArray, queue_size=20)
         self.sub_joint_states   = rospy.Subscriber(name=topic_joint_states, data_class=JointState, callback=self.callback_joint_states, queue_size=10)
         self.sub_goal_pose      = rospy.Subscriber(name=topic_goal_pose, data_class=Float64MultiArray, callback=self.callback_goal_pose, queue_size=10)
 
+        # Our objects
         self.path_planner       = path_planner()
-        self.trajectory_planner = trajectory_planner()
+        self.trajectory_planner = TrajectoryPlanner()
         self.kinematics         = robot_kinematics()
 
-
+        # Constants and parameters
         self.curr_joint_states  = rospy.wait_for_message(topic_joint_states, JointState, rospy.Duration(10)).position
         self.curr_goal_pose     = None
         self.has_a_plan         = False     # Indicates if a motion execution plan is present
@@ -131,16 +133,17 @@ def main(argv):
     topic_goal_pose     = "/goal_pose"
 
     rospy.logwarn("Operation Mode " + str(operation_mode))
-    manager     = motion_manager(topic_joint_command, topic_joint_states, topic_goal_pose)
+    motion_manager      = MotionManager(topic_joint_command, topic_joint_states, topic_goal_pose)
 
     # Loop
     rate = rospy.Rate(1000)
     while not rospy.is_shutdown():
 
-        if manager.has_active_goal_pose():
+        if motion_manager.has_active_goal_pose():
             
-            if manager.has_a_plan:
+            if motion_manager.has_a_plan:
                 # /TODO Follow plan, Iterate over trajectory list (1kHz)
+                # /TODO Detect divergence from planned joints to actual joints
                 pass
             else:
                 # Get a plan

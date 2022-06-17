@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 
 class robot_kinematics:
     def __init__(self, debug=False):
+        ''' Parameters:
+                debug (bool): Enables debug behavior
+        '''
         self.debug = debug
 
     def get_pose_from_angles(self, theta):

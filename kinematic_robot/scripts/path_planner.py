@@ -66,6 +66,7 @@ class path_planner:
         
 
     def sample_path_list_jointspace(self):
+        # /TODO CG: This is a task for the trajectory planner 
         # TODO replace .append!
         joint_list = []
         with open((os.path.join(os.path.dirname(__file__),"Path/planned_path_cartesian.csv"))) as f:
