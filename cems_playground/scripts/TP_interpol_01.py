@@ -103,16 +103,17 @@ def plot_trajectory_waypoint_limits(params_pos, params_vel, params_acc, params_j
 
     fig, axs= plt.subplots(4, 1, sharex='col')
 
-    x               = np.linspace(0, time_offset[-1], 1000)  # in seconds
+    x               = np.ogrid[0: np.round(time_offset[-1], 4): 0.001]      # Actual sample rate
+    x               = np.linspace(0, time_offset[-1], 5000)                 # in seconds
     labels_segments = ['ramp up', 'cruise', 'ramp down', 'hold']
-    labels_plots    = ['Position', 'Velocity', 'Acceleration', 'Jerk']
+    labels_axis     = [r'Pos $[deg]$', r'Vel $[deg/s]$', r'Acc $[deg/s^2]$', r'Jerk $[deg/s^3]$']     # /TODO: Change to radians for implementation
     poly_params     = [params_pos, params_vel, params_acc, params_jrk]
     max_value       = [limits['q_pos_max'][joint_id],  limits['q_vel_max'][joint_id],  limits['q_acc_max'][joint_id],  limits['q_jrk_max'][joint_id]]
     min_value       = [limits['q_pos_min'][joint_id], -limits['q_vel_max'][joint_id], -limits['q_acc_max'][joint_id], -limits['q_jrk_max'][joint_id]]
 
     for n in range(len(p_params_pos)):
         params  = poly_params[n]
-        label_p = labels_plots[n]
+        label_a = labels_axis[n]
 
         # Plot poly lines
         for p, (param, t) in enumerate(zip(params, time_offset)) :
@@ -129,20 +130,21 @@ def plot_trajectory_waypoint_limits(params_pos, params_vel, params_acc, params_j
         axs[n].axhline(max_value[n], color='black', lw=2, linestyle='--')
         axs[n].axhline(min_value[n], color='black', lw=2, linestyle='--')
 
-        # Plot dots to show waypoints and limit yaxis
-        if n == 0:
-            axs[n].set_ylim([min(pos) - 5, max(pos) + 5])
-            for i, (t, p) in enumerate(zip(time_offset, pos)):
-                if i == 0 or i == len(time_offset) - 1:
-                    axs[n].plot(t, p, 'o', color='black', label='Waypoints' if i == 0 else "")
-                else:
-                    axs[n].plot(t, p, 'x', color='black', label='Control Point' if i == 1 else "")
-
         axs[n].set_xlim([-0.05, time_offset[-1] + 0.05])
-        axs[n].set_title(label_p)
-    
-    axs[len(axs) - 1].legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=4)
-    fig.tight_layout()
+        axs[n].set_ylabel(label_a)
+
+    # Plot dots to show waypoints and limit yaxis
+    for i, (t, p) in enumerate(zip(time_offset, pos)):
+        if i == 0 or i == len(time_offset) - 1:
+            axs[0].plot(t, p, 'o', color='black', label='Waypoints' if i == 0 else "")
+        else:
+            axs[0].plot(t, p, 'x', color='black', label='Control Point' if i == 1 else "")
+
+    axs[0].set_ylim([min(pos) - 5, max(pos) + 5])
+    axs[0].set_title('4 segment quintic polynomial interpolation')
+    axs[3].legend(bbox_to_anchor =(0.5,-0.8), loc='lower center', ncol=6)
+
+    plt.tight_layout()
     plt.show()
 
     pass
@@ -194,12 +196,12 @@ for j, joint_positions in enumerate(waypoints_t):
                 if dist_ramp_up + dist_cruise + dist_ramp_down > dist:
                     assert 0, "Something went wrong, consider lowering v2"
                 
-                # Get values for quintic control points /TODO /FIXME probably some mistake here
+                # Get values for quintic control points
                 t0  = 0
                 t1  = t0 + ramp_time
-                t2  = t1 + np.sqrt(2 * dist_cruise / max_acc)
+                t2  = t1 + (vel_before_ramp_down - vel_after_ramp_up) / max_acc
                 t3  = t2 + ramp_time
-                t4  = t3 + (dist_ramp_up + dist_cruise + dist_ramp_down) / v2
+                t4  = t3 + (dist - dist_ramp_up - dist_cruise - dist_ramp_down) / v2
 
                 pos0 = p1
                 pos1 = pos0 + dist_ramp_up
@@ -219,7 +221,7 @@ for j, joint_positions in enumerate(waypoints_t):
                 p_params_acc = [Polynomial(poly).deriv(2).coef for poly in p_params_pos]
                 p_params_jrk = [Polynomial(poly).deriv(3).coef for poly in p_params_pos]
                 
-                plot_trajectory_waypoint(p_params_pos, t, pos)
+                #plot_trajectory_waypoint(p_params_pos, t, pos)
                 plot_trajectory_waypoint_limits(p_params_pos, p_params_vel, p_params_acc, p_params_jrk, t, pos, limits)
 
 
