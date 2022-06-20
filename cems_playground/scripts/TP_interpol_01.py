@@ -328,9 +328,21 @@ for j, joint_positions in enumerate(waypoints_t):
                
         # Mirror and shift polynoms if v2 < v1
         if joints_vel[j, p] < joints_vel[j, p - 1]:
+            if len(p_params_pos) == 4:
+                durations   = [t[k + 1] - t[k] for k in range(4)]
+                t_d   = [0, 
+                for i in range(4):
+                    old_poly        = Polynomial(p_params_pos[i])
+                    p_params_pos[i] = old_poly.convert(window=[1, -1]).coef
+
+                
+
+
+            # TODO this is wrong. no shift necessary
             for i, p_param_pos in enumerate(p_params_pos):
                 old_poly        = Polynomial(p_param_pos)
                 shifted_coefs   = old_poly.convert(window=[-1-t[i], 1-t[i]]).coef
+                shifted_coefs   = old_poly.convert(window=[1+t[i], -1+t[i]]).coef # TODO: try this without the for loop below
                 new_coefs       = []
                 for k, c in enumerate(shifted_coefs):
                     if k % 2 == 0:  new_coefs.append(c)
