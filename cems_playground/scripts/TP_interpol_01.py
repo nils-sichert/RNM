@@ -1,10 +1,64 @@
 import csv
 import os
-from re import X
-from zlib import Z_FULL_FLUSH
+from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Polynomial
+
+class TrajectorySegment:
+
+    trajectory_segment_list = []
+    time_offset_list        = [0]
+
+    def __init__(self, poly_params : List, duration : float):
+        if duration == 0 or duration == np.inf or duration == np.nan:
+            assert 0, "Duration seems wrong"
+
+        self.poly_params= poly_params
+        self.id_num     = len(self.trajectory_segment_list)
+        self.start_t    = self.time_offset_list[-1]
+        self.end_t      = self.start_t + duration
+
+        self.trajectory_segment_list.append(self)
+        self.time_offset_list.append(self.end_t)
+
+    def get_values_for_window(self, derivative=0, step=0.001, sig_dec=3):
+        ''' Returns x and y values for the n-th derivative of the polynomial in the window
+            between start_t and end_t
+            Parameters:
+                derivative (int): Indicates the desired derivative of the polynomial
+                step (float): x step width in seconds, must be <= 1
+                sig_dec (int): Round to significant decimal place
+            Returns:
+                x (List): x values in seconds
+                y (List): y values
+        '''
+        start   = np.round(self.start_t, sig_dec)
+        end     = np.round(self.end_t, sig_dec)
+        x       = np.arange(start, end, step)
+        poly    = Polynomial(self.poly_params)
+        y       = [poly(i - start) for i in x]
+
+        return x, y
+
+    @staticmethod
+    def get_segments_stitched(derivative=0, step=0.001, sig_dec=3):
+        ''' Stitches all available segments together and returns 
+            an x and y list for all segemnts and an array with all
+            time_offsets
+        '''
+
+        x = []
+        y = []
+
+        for trajectory_segment in TrajectorySegment.trajectory_segment_list:
+            x_new, y_new = trajectory_segment.get_values_for_window(derivative, step, sig_dec)
+
+            [x.append(x_n) for x_n in x_new]
+            [y.append(y_n) for y_n in y_new]
+
+        return x, y, TrajectorySegment.time_offset_list
+
 
 def get_list_from_csv(dir_name, file_name):
     ''' Get a list of lists from a csv file
@@ -35,7 +89,7 @@ limits  = { "q_pos_max" : [ 2.8973, 1.7628, 2.8973,-0.0698, 2.8973, 3.7525, 2.89
 joint_num   = 3
 
 # Waypoints here in degree (actually in radians)
-waypoints   = get_list_from_csv("", "waypoints_01.csv")
+waypoints   = get_list_from_csv("", "waypoints_02.csv")
 waypoints   = np.array(waypoints)
 waypoints_t = waypoints.transpose()
 
@@ -67,6 +121,35 @@ def get_quintic_params(t, pos, vel, acc):
         qpoly_params.append(p)
     
     return qpoly_params
+
+def get_initial_velocities(waypoints_t, limits):
+    ''' Given a waypoint matrix [joint][waypoint] a corresponding velocity matrix is returned.
+        Velocities are given in the following way:
+            - First and last velocities are always set to 0
+            - if prev_waypoint < curr_waypoint < next_waypoint: curr_vel = + max_vel
+            - if prev_waypoint > curr_waypoint > next_waypoint: curr_vel = - max_vel
+            - else: curr_vel = 0
+    '''
+    
+    joints_vel  = np.zeros(waypoints_t.shape)
+    wp          = waypoints_t
+
+    # Iterate over joints
+    for j in range(wp.shape[0]):
+        max_vel = limits['q_vel_max'][j]
+        for k in range(1, wp.shape[1] - 1):
+            if   wp[j, k - 1] < wp[j, k] < wp[j, k + 1]: joints_vel[j, k] = max_vel
+            elif wp[j, k - 1] > wp[j, k] > wp[j, k + 1]: joints_vel[j, k] = - max_vel
+            else: joints_vel[j, k] = 0
+
+            # TODO override here for debug
+            joints_vel[j, k] = max_vel
+            pass
+
+    joints_vel[:, 0] = 0
+    joints_vel[:,-1] = 0
+
+    return joints_vel
 
 def plot_trajectory_waypoint(poly_params_pos, time_offset, pos):
 
@@ -111,7 +194,7 @@ def plot_trajectory_waypoint_limits(params_pos, params_vel, params_acc, params_j
     max_value       = [limits['q_pos_max'][joint_id],  limits['q_vel_max'][joint_id],  limits['q_acc_max'][joint_id],  limits['q_jrk_max'][joint_id]]
     min_value       = [limits['q_pos_min'][joint_id], -limits['q_vel_max'][joint_id], -limits['q_acc_max'][joint_id], -limits['q_jrk_max'][joint_id]]
 
-    for n in range(len(p_params_pos)):
+    for n in range(len(poly_params)):
         params  = poly_params[n]
         label_a = labels_axis[n]
 
@@ -162,25 +245,35 @@ joints_vel  = np.zeros(waypoints_t.shape)
 # Iterate over joints
 for j, joint_positions in enumerate(waypoints_t):   
 
+    master_poly_params      = []
+    master_times            = []
+
     # Joint parameters
     max_vel     = limits['q_vel_max'][j]
     max_acc     = limits['q_acc_max'][j]
     max_jrk     = limits['q_jrk_max'][j]
     ramp_time   = (np.pi * max_acc) / (2 * max_jrk)    # Time for a full ramp with sinosodial acc profile
-    joints_vel[j, 1:-1] = max_vel    # Set all but first and last speeds to max speed
-  
-    
-    # Initial pos
+    joints_vel[j, 1:-1] = max_vel
+
+    # Initial time
     joints_time[j][0]  = 0
     
     # Iterate over positions
     for p in range(1, len(joint_positions)):        
-        p1      = joint_positions[p - 1]    # Previous pos
-        p2      = joint_positions[p]        # Current pos
+        wp1     = joint_positions[p - 1]    # Previous waypoint
+        wp2     = joint_positions[p]        # Current waypoint
         v1      = joints_vel[j, p - 1]      # Previous velocity
         v2      = joints_vel[j, p]          # Current velocity
-        dist    = abs(p1 - p2)
+        dist    = abs(wp1 - wp2)
         full_ramp_dist  = max_acc * (ramp_time ** 2) + 2 * joints_vel[j][p - 1] * ramp_time
+
+        printm(f"wp1: {wp1}\twp2: {wp2}\tv1: {v1} \tv2: {v2}")
+
+        # Swap velocities in case v2 is smaller than v1 (so we always have a rising velocity)
+        if v2 < v1:
+            v1  = joints_vel[j, p]          # Current velocity
+            v2  = joints_vel[j, p - 1]      # Previous velocity
+
 
         # Case: Speed change between positions
         if not v1 == v2:
@@ -203,11 +296,11 @@ for j, joint_positions in enumerate(waypoints_t):
                 t3  = t2 + ramp_time
                 t4  = t3 + (dist - dist_ramp_up - dist_cruise - dist_ramp_down) / v2
 
-                pos0 = p1
+                pos0 = wp1
                 pos1 = pos0 + dist_ramp_up
                 pos2 = pos1 + dist_cruise
                 pos3 = pos2 + dist_ramp_down
-                pos4 = p2
+                pos4 = wp2
 
                 t   = [t0, t1, t2, t3, t4]
                 pos = [pos0, pos1, pos2, pos3, pos4]
@@ -215,21 +308,58 @@ for j, joint_positions in enumerate(waypoints_t):
                 acc = [0, max_acc, max_acc, 0, 0]
                 jrk = [0, 0, 0, 0, 0]
 
-                # Get quintic polynomial parameters (also for vel, acc, jrk)
+                # Get quintic polynomial parameters
                 p_params_pos = get_quintic_params(t, pos, vel, acc)
-                p_params_vel = [Polynomial(poly).deriv(1).coef for poly in p_params_pos]
-                p_params_acc = [Polynomial(poly).deriv(2).coef for poly in p_params_pos]
-                p_params_jrk = [Polynomial(poly).deriv(3).coef for poly in p_params_pos]
+
                 
-                #plot_trajectory_waypoint(p_params_pos, t, pos)
-                plot_trajectory_waypoint_limits(p_params_pos, p_params_vel, p_params_acc, p_params_jrk, t, pos, limits)
-
-
             else:
                 # Use Acceleration Pulse
                 assert 0, "not implemented yet"
 
         # Case: No speed change between positions
+        if v1 == v2:
+            t0  = 0
+            t1  = dist / v1
+            
+            t   = [t0, t1]
+            pos = [wp1, wp2]
+
+            p_params_pos    = [[wp1, (wp2 - wp1) / (t1 - t0), 0, 0, 0]]
+               
+        # Mirror and shift polynoms if v2 < v1
+        if joints_vel[j, p] < joints_vel[j, p - 1]:
+            for i, p_param_pos in enumerate(p_params_pos):
+                old_poly        = Polynomial(p_param_pos)
+                shifted_coefs   = old_poly.convert(window=[-1-t[i], 1-t[i]]).coef
+                new_coefs       = []
+                for k, c in enumerate(shifted_coefs):
+                    if k % 2 == 0:  new_coefs.append(c)
+                    else:           new_coefs.append(-c)
+                p_params_pos[i]  = new_coefs
+
+
+        # Print outs and further calculations
+        # Register trajectory segments
+        for i, p_param_pos in enumerate(p_params_pos):
+            #TrajectorySegment(p_param_pos, t[i + 1] - t[i])
+            pass
+
+        p_params_vel = [Polynomial(poly).deriv(1).coef for poly in p_params_pos]
+        p_params_acc = [Polynomial(poly).deriv(2).coef for poly in p_params_pos]
+        p_params_jrk = [Polynomial(poly).deriv(3).coef for poly in p_params_pos]
+        #plot_trajectory_waypoint(p_params_pos, t, pos)
+        plot_trajectory_waypoint_limits(p_params_pos, p_params_vel, p_params_acc, p_params_jrk, t, pos, limits)
+
+        master_poly_params.append(p_params_pos)
+        master_times.append(t)
+        
+        pass 
+
+    x, y = TrajectorySegment.get_segments_stitched(step=0.000001, sig_dec=6)
+    plt.plot(x,y)
+    plt.show()
+    #print(master_poly_params)
+    pass
 
 
 pass
