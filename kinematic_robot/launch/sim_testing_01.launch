@@ -7,7 +7,7 @@
     <param name="topic_joint_command" value="/joint_position_example_controller_sim/joint_command" />
     <param name="topic_joint_states" value="/joint_states" />
 
-	<node name="dummy_publisher" pkg="kinematic_robot" type="dummy_publisher.py" />
+	<!-- <node name="dummy_publisher" pkg="kinematic_robot" type="dummy_publisher.py" /> -->
 
 
 </launch>

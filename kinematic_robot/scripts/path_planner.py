@@ -9,7 +9,7 @@ import numpy as np
 import csv
 from std_msgs.msg import Float64MultiArray
 import os
-from trajectory_planner import trajectory_planner
+from trajectory_planner_simple import trajectory_planner_simple
 
 tmp = os.path.dirname(__file__)
 
@@ -65,38 +65,7 @@ class path_planner:
         return path_list
         
 
-    def sample_path_list_jointspace(self):
-        # /TODO CG: This is a task for the trajectory planner 
-        # TODO replace .append!
-        joint_list = []
-        with open((os.path.join(os.path.dirname(__file__),"Path/planned_path_cartesian.csv"))) as f:
-                reader = csv.reader(f, delimiter=",")
-                for row in reader:
-                    joint_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
-       
-
-        with open(os.path.join(os.path.dirname(__file__),"Path/planned_path_jointspace_1ms.csv"),'r+') as file:
-            file.truncate(0)
-
-        current_pose = self.robot_kinematics.get_pose_from_angles(joint_list[0])
-
-        for i in range(len(joint_list) - 1):
-            next_joints = joint_list[i + 1]
-            next_pose = self.robot_kinematics.get_pose_from_angles(next_joints)     # /FIXME confirm correction
-            dist = np.linalg.norm(next_pose[9:12] -  current_pose[9:12])
-            steps = dist/self.movement_speed
-
-            with open((os.path.join(os.path.dirname(__file__), "")), mode="a", newline="") as f:    # /FIXME Opens a directory, not a file
-                writer = csv.writer(f, delimiter=",")
-                delta_joints_per_step = (joint_list[i+1] - joint_list[i])/steps
-                for j in range(steps):
-                    sample_joint = joint_list + j*delta_joints_per_step
-                    writer.writerow(sample_joint)
-
-            current_pose = next_pose
-
-        return 0
-
+    
         # method, that interpolates Joint Space into 1ms Step
         # number of steps need to be calculated, e.g. calculating stepwidth with get_A and divide by max. movement per 1ms
         
@@ -104,4 +73,4 @@ class path_planner:
 if __name__ == '__main__':
     path_planner = path_planner()
     #path_planner.calculate_path_list_jointspace()
-    path_planner.sample_path_list_jointspace()
+    path_planner.calculate_path_list_jointspace()

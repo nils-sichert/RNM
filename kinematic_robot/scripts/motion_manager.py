@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 //TODO
 source devel/setup.bash
@@ -19,10 +19,8 @@ from std_msgs.msg import Float64MultiArray
 
 from path_planner import path_planner
 from robot_kinematics import robot_kinematics
-from trajectory_planner import TrajectoryPlanner
-
-
-tmp = os.path.dirname(__file__)
+from trajectory_planner_simple import trajectory_planner_simple
+from motion_executor import MotionExecutor
 
 class MotionManager:
     def __init__(self, topic_joint_command, topic_joint_states, topic_goal_pose, err_tol=1e-3, debug=False):
@@ -35,8 +33,9 @@ class MotionManager:
 
         # Our objects
         self.path_planner       = path_planner()
-        self.trajectory_planner = TrajectoryPlanner()
+        self.trajectory_planner = trajectory_planner_simple()
         self.kinematics         = robot_kinematics()
+        self.motion_executor    = MotionExecutor()
 
         # Constants and parameters
         self.curr_joint_states  = rospy.wait_for_message(topic_joint_states, JointState, rospy.Duration(10)).position
@@ -101,10 +100,7 @@ class MotionManager:
         #/TODO compare actual state with target state, if error to high do not send new angles, instead send last target angles
         pass
 
-    
-
-
-    
+      
     def get_flag_list(self):
         # if / else flag, replace existing list
         pass
@@ -116,8 +112,11 @@ class MotionManager:
     def plan_list(self):
         # initialize list planing
         # TODO write listplanner
-        path = self.trajectory_planer.create_path()
+        path = self.trajectory_planner.create_path()
         pass
+
+    def motion_executioin(self):
+        self.motion_executor.run()
 
     
         
@@ -132,6 +131,7 @@ def main(argv):
     topic_joint_states  = rospy.get_param("/topic_joint_states")
     topic_goal_pose     = "/goal_pose"
 
+    
     rospy.logwarn("Operation Mode " + str(operation_mode))
     motion_manager      = MotionManager(topic_joint_command, topic_joint_states, topic_goal_pose)
 
@@ -150,7 +150,7 @@ def main(argv):
                 # /TODO Get a path
                 # /TODO Get a trajectory
                 pass
-
+        motion_manager.motion_executioin()
         rate.sleep()
         pass
 
