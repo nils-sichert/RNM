@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<launch>
+    <!--include file="$(find franka_example_controllers)/launch/joint_position_example_controller.launch" / 
+    Dont include this but let it launch from right pc
+    -->
+    
+    
+    <node name="motion_executor" pkg="kinematic_robot" type="motion_executor.py">
+        <param name="command_topic" value="/joint_position_example_controller/joint_command" />
+    </node>
+
+</launch>
+
+

@@ -15,12 +15,13 @@ class MotionExecutor:
             msg = rospy.wait_for_message("/joint_states", JointState, rospy.Duration(10))
         else:
             msg = rospy.wait_for_message("/franka_state_controller/joint_states_desired", JointState, rospy.Duration(10))
+            # joint_states_desired is correct
 
         self.pub     = rospy.Publisher(command_topic, Float64MultiArray, queue_size=1)
         self.initial_joints = np.array(msg.position)
         self.publish_list = []
         self.move2start_list = []
-        self.movement_speed = 0.01/1000
+        self.movement_speed = 0.02/1000
         self.robot_kinematics = robot_kinematics()
 
     def run(self):
