@@ -67,20 +67,20 @@ class robot_kinematics:
         
 
         # Settings for divergence detection 
-        n_last_entries  = 20                 # n past entries used for detection
-        n_allowed_fails = 5000                # n consequtive iterations that are allowed before abortion
+        n_last_entries  = 500                 # n past entries used for detection
+        n_allowed_fails = 10000               # n consequtive iterations that are allowed before abortion
 
 
         delta_list_sqsum    = []            # Sum of squared delta_A entries
         delta_list_max      = []            # Max of delta_A matrix
         n_failed_iterations = 0             # n of failed iterations (non converging)
         
-
+        counter = 0
         A_current = self.get_pose_from_angles(theta_init)
         delta_A = (A_target - A_current)
         theta   = theta_init
 
-        while np.linalg.norm(delta_A) > err_tol:
+        while np.abs(delta_A).max() > err_tol:
             # TODO: Replace abortion criteria with cartesian equivalent
             J_theta = self.get_J_2(theta)
             
@@ -94,18 +94,18 @@ class robot_kinematics:
             # Detect divergence
             delta_sqsum = sum(delta_A**2)
             delta_max   = max(abs(delta_A))
-
+            counter += 1
             if delta_sqsum >= sum(delta_list_sqsum[-n_last_entries:])/n_last_entries and len(delta_list_sqsum) >= n_last_entries:
                 delta_list_sqsum.append(delta_sqsum)
                 n_failed_iterations += 1
-                print("Warning: IK (square sum) not converging")
-                print(delta_list_sqsum[-5:])
+                #print("Warning: IK (square sum) not converging")
+                #print(delta_list_sqsum[-5:])
 
             elif delta_max >= sum(delta_list_max[-n_last_entries:])/n_last_entries and len(delta_list_max) >= n_last_entries:
                 delta_list_max.append(delta_max)
                 n_failed_iterations += 1
-                print("Warning: IK (max value) not converging")
-                print(delta_list_max[-5:])
+                #print("Warning: IK (max value) not converging")
+                #print(delta_list_max[-5:])
 
             else:
                 delta_list_sqsum.append(delta_sqsum)
@@ -146,7 +146,7 @@ class robot_kinematics:
             plt.show()
 
         pos_error   = np.linalg.norm(delta_A[9:12])
-
+        print(counter)
         return theta, pos_error
 
 
@@ -184,7 +184,21 @@ if __name__ == '__main__':
     
     kinematics  = robot_kinematics(debug=True)
 
-    theta_init  = np.array([ 0,  0,  0,  0,  0,  0,  0])    # Theta used to init iterative search (in degree)
+    theta_init  = np.array([ 0.0,0.0,0.0,-1.0,0.0,1.0,0.0])    # Theta used to init iterative search (in degree)
+    theta_1  = np.array([ 0.085,0.085,0.085,0.085,0.085,0.085,0.085]) 
+    theta_2  = np.array([ 0.095,0.095,0.095,0.095,0.095,0.095,0.095]) 
+    theta_3  = np.array([ 0.105,0.105,0.105,0.105,0.105,0.105,0.105]) 
+    theta_4  = np.array([ 0.115,0.115,0.115,0.115,0.115,0.115,0.115]) 
+    A1 = kinematics.get_pose_from_angles(theta_init)
+    A2 = kinematics.get_pose_from_angles(theta_1)
+    A3 = kinematics.get_pose_from_angles(theta_2)
+    A4 = kinematics.get_pose_from_angles(theta_3)
+    A5 = kinematics.get_pose_from_angles(theta_4)
+    print(A1)
+    print(A2)
+    print(A3)
+    print(A4)
+    print(A5)
     theta_delta = np.array([20, 20, 20, 20, 20, 20, 20])    # Delta from init theta to target theta (in degree)
     theta_target = [np.deg2rad(theta_init[i] + theta_delta[i]) for i in range(7)]
 

@@ -6,11 +6,12 @@ from sensor_msgs.msg import JointState
 import numpy as np
 import csv
 import os
+from tqdm import tqdm
 # FIXME eine Zeile zu viel, dividieren durch 0 unterbinden, nan bei gleicher Position?
 
 class trajectory_planner_simple:
     def __init__(self):
-        self.movement_speed = 0.01/1000 #[m/s]
+        self.movement_speed = 0.02/1000 #[m/s]
         self.robot_kinematics = robot_kinematics()
         tmp = os.path.dirname(__file__)
 
@@ -28,7 +29,7 @@ class trajectory_planner_simple:
 
             current_pose = self.robot_kinematics.get_pose_from_angles(joint_list[0])
 
-            for i in range(len(joint_list) - 1):
+            for i in tqdm(range(len(joint_list) - 1), ncols=100):
                 current_joints = np.array(joint_list[i])
                 next_joints = np.array(joint_list[i + 1])
                 next_pose = self.robot_kinematics.get_pose_from_angles(next_joints)     # /FIXME confirm correction

@@ -10,6 +10,7 @@ import csv
 from std_msgs.msg import Float64MultiArray
 import os
 from trajectory_planner_simple import trajectory_planner_simple
+from tqdm import tqdm
 
 tmp = os.path.dirname(__file__)
 
@@ -17,7 +18,7 @@ class path_planner:
     def __init__(self):
         self.movement_speed = 0.05/1000 #[m/s]
         self.robot_kinematics = robot_kinematics()
-        self.max_dist_between_supports = 0.05
+        self.max_dist_between_supports = 0.01
 
     def get_path_list_cartesian(self):
             path_list = []
@@ -30,14 +31,14 @@ class path_planner:
     def calculate_path_list_jointspace(self):
         path_list = self.get_path_list_cartesian()
         # TODO hardcode ersetzten
-        current_theta = [0,0,0,0,0,0,0]
+        current_theta = [0.0,0.0,0.0,-1.0,0.0,1.0,0.0]
         current_pose = self.robot_kinematics.get_pose_from_angles(current_theta)
         tmp_A_list = []
        
 
-        for i in range(len(path_list)):
+        for i in range(len(path_list)-1):
             #tmp_pos_list.append(current_pos)
-            next_pose = np.array(path_list[i])
+            next_pose = np.array(path_list[i+1])
             delta_pose = next_pose - current_pose
             tmp_dist = np.linalg.norm(delta_pose)
             counter = int((tmp_dist// self.max_dist_between_supports)+1)
@@ -51,16 +52,18 @@ class path_planner:
         with open(os.path.join(os.path.dirname(__file__),"Path/planned_path_jointspace.csv"),'r+') as file:
             file.truncate(0)
 
-        for i in range(len(tmp_A_list)-1):
+        A_current = tmp_A_list[0]
+        for i in tqdm(range(len(tmp_A_list)-1), ncols=100 ):
             # TODO hardcode ersetzten
 
             with open((os.path.join(os.path.dirname(__file__),"Path/planned_path_jointspace.csv")), mode="a", newline="") as f:
                 writer = csv.writer(f, delimiter=",")
                 writer.writerow(current_theta)
 
-            A_current = tmp_A_list[i]
+            
             A_target = tmp_A_list [i+1]
-            current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,A_current,A_target)
+            current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,A_target)
+        
 
         return path_list
         
