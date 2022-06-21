@@ -284,7 +284,7 @@ def plot_trajectory_stitched(traj : Trajectory):
                 axs[axs_n].axvline(t_, color='black', lw=1, linestyle='-')
                 if axs_n == 0: 
                     axs[0].plot(t_, pos_, 'o', color='black', label='Waypoint', ms=5)
-                    axs[0].annotate(str(wp_count), (t_ + 0.01, pos_ + 1))
+                    axs[0].text(t_, -20, str(wp_count))
                     wp_count = wp_count + 1
             else :
                 axs[axs_n].axvline(t_, color='gray', lw=0.5, linestyle='-')
@@ -340,7 +340,7 @@ def get_test_case(pos_direction, pos_sign, vel_direction, vel_sign, max_vel):
     return pos, vel
 
 
-""" TODO Tests Cases:
+    """ TODO Tests Cases:
     Successfull:
     pos_+_rising, vel_+_constant
     pos_-_rising, vel_+_constant
@@ -359,17 +359,23 @@ def get_test_case(pos_direction, pos_sign, vel_direction, vel_sign, max_vel):
     Pos falling
 """
 
-waypoints_t, joints_vel = get_test_case('falling','+','constant','+', limits['q_vel_max'][0])
+
+#waypoints_t, joints_vel = get_test_case('falling','+','constant','+', limits['q_vel_max'][0])
 
 # Check if path has invalid values (out of min max bounds)
 for j, joint_positions in enumerate(waypoints_t):
     for k, wp in enumerate(joint_positions):
         assert wp >= limits['q_pos_min'][j] and wp <= limits['q_pos_max'][j], f"Waypoint {k} of joint {j} out of q_min_pos, q_max_pos bounds: {wp}"
 
+""" Notes:
+    - No two consecutive waypoints can have 0 velocity
+    - Implicit 0 velocity crossing is not possible, must always be explicitly stated
+"""
+# TODO Check if velocities comply with notes above
 
 # Get trajectory parameters for joints--------------------------
 joints_time = np.zeros(waypoints_t.shape)
-#joints_vel  = np.zeros(waypoints_t.shape)
+joints_vel  = np.zeros(waypoints_t.shape)
 
 # Iterate over joints
 for j, joint_positions in enumerate(waypoints_t):   
@@ -382,69 +388,93 @@ for j, joint_positions in enumerate(waypoints_t):
 
     # Initial time
     joints_time[j][0]  = 0
-    #joints_vel[j] = [0, max_acc, max_acc, max_acc, 0]
+    joints_vel[j] = [0, max_vel, max_vel, 0, -max_vel, -max_vel, 0]
 
     trajectory_joint0  = Trajectory(0, 0)
     
     # Iterate over positions
-    for p in range(1, len(joint_positions)):        
-        wp1     = joint_positions[p - 1]    # Previous waypoint
-        wp2     = joint_positions[p]        # Current waypoint
-        dist    = abs(wp1 - wp2)
+    for p in range(1, len(joint_positions)):
+        og_wp1  = joint_positions[p - 1]    # Previous waypoint
+        og_wp2  = joint_positions[p]        # Current waypoint
+        wp_increase = og_wp1 < og_wp2       # Flag for swapped waypoints (in case og_wp1 > og_wp2)
+
+        og_v1   = joints_vel[j, p - 1]      # Previous velocity
+        og_v2   = joints_vel[j, p]          # Current velocity
+        v_increase  = abs(og_v1) < abs(og_v2)   # Flag for swapped velocities (in case og_v1 > og_v2)
+
+        dist    = abs(og_wp1 - og_wp2)
         full_ramp_dist  = max_acc * (ramp_time ** 2) + 2 * joints_vel[j][p - 1] * ramp_time
 
-        # Swap velocities in case v2 is smaller than v1 (so we always have a rising velocity for calculations)
-        if joints_vel[j, p - 1] < joints_vel[j, p]:
-            v1  = joints_vel[j, p - 1]      # Previous velocity     for v1 < v2
-            v2  = joints_vel[j, p]          # Current velocity
-        else:
-            v1  = joints_vel[j, p]          # Current velocity      for v1 > v2
-            v2  = joints_vel[j, p - 1]      # Previous velocity
+        # Normal case
+        if wp_increase and v_increase:
+            wp1 = og_wp1
+            wp2 = og_wp2
+            v1  = og_v1
+            v2  = og_v2
+        # Swap velocities, so we always have a rising velocity for calculations
+        if wp_increase and not v_increase:
+            wp1 = og_wp1
+            wp2 = og_wp2
+            v1  = og_v2
+            v2  = og_v1
+        # Swap waypoints, so we always have rising position for calculation
+        if not wp_increase and v_increase:
+            wp1 = og_wp2
+            wp2 = og_wp1
+            v1  = - og_v1
+            v2  = - og_v2
+        # Swap waypoints and velocities
+        if not wp_increase and not v_increase:
+            wp1 = og_wp2
+            wp2 = og_wp1
+            v1  = - og_v2
+            v2  = - og_v1
 
-        printm(f"wp1: {wp1}\twp2: {wp2}\tv1: {joints_vel[j, p - 1]} \tv2: {joints_vel[j, p]}")
+        
+        printm(f"Original: wp1: {og_wp1:.2f}\twp2: {og_wp2:.2f}\tv1: {og_v1:.2f} \tv2: {og_v2:.2f}")
+        printm(f"Modified: wp1: {wp1:.2f}\twp2: {wp2:.2f}\tv1: {v1:.2f} \tv2: {v2:.2f}")
+        printm(f"wp_increase: {wp_increase}, v_increase: {v_increase}")
 
         # Case: Speed change between positions
         if v1 < v2:
-            # Enough distance for full acceleration ramp
-            if dist > full_ramp_dist:
-                # Use Sustained Acceleration Pulse
-                vel_after_ramp_up    = v1 + (max_acc * ramp_time) / 2   # V_a
-                vel_before_ramp_down = v2 - (max_acc * ramp_time) / 2   # V_b
-                dist_ramp_up    = max_acc * (ramp_time ** 2) * (1/4 - 1/(np.pi**2)) + v1 * ramp_time
-                dist_cruise     = (vel_before_ramp_down ** 2 - vel_after_ramp_up ** 2) / (2 * max_acc)
-                dist_ramp_down  = max_acc * (ramp_time ** 2) * (1/4 + 1/(np.pi**2)) + vel_before_ramp_down * ramp_time
-                
-                if dist_ramp_up + dist_cruise + dist_ramp_down > dist:
-                    assert 0, "Something went wrong, consider lowering v2"
-                
-                # Get values for quintic control points
-                t0  = 0
-                t1  = t0 + ramp_time
-                t2  = t1 + (vel_before_ramp_down - vel_after_ramp_up) / max_acc
-                t3  = t2 + ramp_time
-                t4  = t3 + (dist - dist_ramp_up - dist_cruise - dist_ramp_down) / v2
+            # Make sure that there is enough distance for full acceleration ramp
+            if not dist > full_ramp_dist:
+                assert 0, "Use Acceleration Pulse, or make dist larger - not implemented yet"
 
-                pos0 = wp1
-                pos1 = pos0 + dist_ramp_up
-                pos2 = pos1 + dist_cruise
-                pos3 = pos2 + dist_ramp_down
-                pos4 = wp2
+            # Use Sustained Acceleration Pulse
+            vel_after_ramp_up    = v1 + (max_acc * ramp_time) / 2   # V_a
+            vel_before_ramp_down = v2 - (max_acc * ramp_time) / 2   # V_b
+            dist_ramp_up    = max_acc * (ramp_time ** 2) * (1/4 - 1/(np.pi**2)) + v1 * ramp_time
+            dist_cruise     = (vel_before_ramp_down ** 2 - vel_after_ramp_up ** 2) / (2 * max_acc)
+            dist_ramp_down  = max_acc * (ramp_time ** 2) * (1/4 + 1/(np.pi**2)) + vel_before_ramp_down * ramp_time
+            
+            if dist_ramp_up + dist_cruise + dist_ramp_down > dist:
+                assert 0, "Something went wrong, consider lowering v2"
+            
+            # Get values for quintic control points
+            t0  = 0
+            t1  = t0 + ramp_time
+            t2  = t1 + (vel_before_ramp_down - vel_after_ramp_up) / max_acc
+            t3  = t2 + ramp_time
+            t4  = t3 + (dist - dist_ramp_up - dist_cruise - dist_ramp_down) / v2
 
-                t   = [t0, t1, t2, t3, t4]
-                pos = [pos0, pos1, pos2, pos3, pos4]
-                vel = [v1, vel_after_ramp_up, vel_before_ramp_down, v2, v2]
-                acc = [0, max_acc, max_acc, 0, 0]
-                jrk = [0, 0, 0, 0, 0]
+            pos0 = wp1
+            pos1 = pos0 + dist_ramp_up
+            pos2 = pos1 + dist_cruise
+            pos3 = pos2 + dist_ramp_down
+            pos4 = wp2
 
-                if any(tt == np.nan or tt == np.inf for tt in t) or sum(t) == 0:
-                    assert 0, "Invalid times: Something is wrong here. Check if position change makes sense with velocities."
+            t   = [t0, t1, t2, t3, t4]
+            pos = [pos0, pos1, pos2, pos3, pos4]
+            vel = [v1, vel_after_ramp_up, vel_before_ramp_down, v2, v2]
+            acc = [0, max_acc, max_acc, 0, 0]
+            jrk = [0, 0, 0, 0, 0]
 
-                # Get quintic polynomial parameters
-                p_params_pos = get_quintic_params(t, pos, vel, acc)
-      
-            else:
-                # Use Acceleration Pulse
-                assert 0, "not implemented yet"
+            if any(tt == np.nan or tt == np.inf for tt in t) or sum(t) == 0:
+                assert 0, "Invalid times: Something is wrong here. Check if position change makes sense with velocities."
+
+            # Get quintic polynomial parameters
+            p_params_pos = get_quintic_params(t, pos, vel, acc) 
 
         # Case: No speed change between positions
         if v1 == v2:
@@ -456,45 +486,70 @@ for j, joint_positions in enumerate(waypoints_t):
 
             p_params_pos    = [[wp1, (wp2 - wp1) / (t1 - t0), 0, 0, 0]]
                
-        # Mirror and shift polynoms if v2 < v1, set new offset times and mirror pos as well
-        if joints_vel[j, p] < joints_vel[j, p - 1]:
+        # Mirror and shift polynoms, set new offset times and mirror pos as well
+        if not v_increase:
 
+            l = len(p_params_pos)
             # Only for 4-segment quintic interpolation
-            if len(p_params_pos) == 4:
-                polycoefs_old   = p_params_pos.copy()
-                times_old       = t.copy()
-                pos_old         = pos.copy()
-                durations       = [times_old[k + 1] - t[k] for k in range(4)]
+            if not len(p_params_pos) == 4:
+                #assert 0, "Warning! Not tested behavior"
+                pass
 
-                t[0] = 0
-                for i in range(4):
-                    old_poly        = Polynomial(polycoefs_old[i])
-                    # Mirror along y axis and shift in x direction
-                    temp_coefs      = old_poly.convert(window=[1 + durations[i], - 1 + durations[i]]).coef
-                    # Mirror along x axis and shift in y direction
-                    temp_coefs      = -temp_coefs
-                    temp_coefs[0]   = temp_coefs[0] + (wp1 + (wp2 - wp1) / 2) * 2
+            polycoefs_old   = p_params_pos.copy()
+            times_old       = t.copy()
+            pos_old         = pos.copy()
+            durations       = [times_old[k + 1] - t[k] for k in range(l)]
 
-                    p_params_pos[3 - i] = temp_coefs
-                    t[i + 1]            = t[i] + durations[3 - i]
+            t[0] = 0
+            for i in range(l):
+                old_poly        = Polynomial(polycoefs_old[i])
+                # Mirror along y axis and shift in x direction
+                temp_coefs      = old_poly.convert(window=[1 + durations[i], - 1 + durations[i]]).coef
+                # Mirror along x axis and shift in y direction
+                temp_coefs      = -temp_coefs
+                temp_coefs[0]   = temp_coefs[0] + (og_wp1 + (og_wp2 - og_wp1) / 2) * 2
 
-                for i in range(5):
-                    pos[4 - i]  = -pos_old[i] + (wp1 + (wp2 - wp1) / 2) * 2
-                    
+                p_params_pos[l - 1 - i] = temp_coefs
+                t[i + 1]            = t[i] + durations[l - 1 - i]
 
-        # Print outs and further calculations
+            for i in range(l + 1):
+                pos[l - i]  = -pos_old[i] + (og_wp1 + (og_wp2 - og_wp1) / 2) * 2
+
+        # Mirror over offsetted x, set new pos as well
+        if not wp_increase :
+
+            l = len(p_params_pos)
+            # Only for 4-segment quintic interpolation
+            if not len(p_params_pos) == 4:
+                #assert 0, "Warning! Not tested behavior"
+                pass
+
+            polycoefs_old   = p_params_pos.copy()
+            pos_old         = pos.copy()
+
+            for i in range(l):
+                old_poly        = Polynomial(polycoefs_old[i])
+                temp_coefs      = old_poly.coef
+                # Mirror along x axis and shift in y direction
+                temp_coefs      = -temp_coefs
+                temp_coefs[0]   = temp_coefs[0] + (og_wp1 + (og_wp2 - og_wp1) / 2) * 2
+
+                p_params_pos[i] = temp_coefs
+
+            for i in range(l + 1):
+                pos[i]  = - pos_old[i] + (og_wp1 + (og_wp2 - og_wp1) / 2) * 2
+
         # Register trajectory segments
         for i, p_param_pos in enumerate(p_params_pos):
-            if i == 0 or i == len(p_params_pos) : is_wp = True
-            else: is_wp = False
+            is_wp = (i == 0 or i == len(p_params_pos))
             trajectory_joint0.register_segment(p_param_pos, t[i + 1] - t[i], pos[i], pos[i+1], is_wp)
-            pass
 
         p_params_vel = [Polynomial(poly).deriv(1).coef for poly in p_params_pos]
         p_params_acc = [Polynomial(poly).deriv(2).coef for poly in p_params_pos]
         p_params_jrk = [Polynomial(poly).deriv(3).coef for poly in p_params_pos]
-        # plot_trajectory_waypoint(p_params_pos, t, pos)
-        # plot_trajectory_waypoint_limits(p_params_pos, p_params_vel, p_params_acc, p_params_jrk, t, pos, limits)
+
+        #plot_trajectory_waypoint(p_params_pos, t, pos)
+        #plot_trajectory_waypoint_limits(p_params_pos, p_params_vel, p_params_acc, p_params_jrk, t, pos, limits)
         
 
     plot_trajectory_stitched(trajectory_joint0)
