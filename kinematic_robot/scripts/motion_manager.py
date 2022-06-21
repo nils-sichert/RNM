@@ -115,7 +115,9 @@ class MotionManager:
         path = self.trajectory_planner.create_path()
         pass
 
-    def motion_executioin(self):
+    def move2start(self):
+        self.motion_execution.
+    def motion_execution(self):
         self.motion_executor.run()
 
     
@@ -150,7 +152,7 @@ def main(argv):
                 # /TODO Get a path
                 # /TODO Get a trajectory
                 pass
-        motion_manager.motion_executioin()
+        motion_manager.motion_execution()
         rate.sleep()
         pass
 
