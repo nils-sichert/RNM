@@ -10,12 +10,15 @@ class robot_kinematics:
         ''' Parameters:
                 debug (bool): Enables debug behavior
         '''
-        self.debug = debug
-        dh_creator = DhCreator()
-        self.A_lamb = dh_creator.get_A_lamb()
-        self.J_lamb = dh_creator.get_J_lamb()
+        # flags
+        self.debug = debug                      # flag to (de)activate plots to controll divergence/ konvergence
+        
+        # instances
+        dh_creator = DhCreator()                
+        self.A_lamb = dh_creator.get_A_lamb()   # load lambdafunction of A which is calculated with the help of a DH-Matrix
+        self.J_lamb = dh_creator.get_J_lamb()   # load lambdafunction of J which is calculated with the help of the lambdafunction of A
 
-    def get_pose_from_angles(self, theta):
+    def get_pose_from_angles(self, theta_target):
         ''' Get pose matrix A from joint angles. Utilizing pre-computed expressions using DH-parameters.
             
             Parameters:
@@ -25,27 +28,13 @@ class robot_kinematics:
                 A (Matrix): Pose matrix
                     Position is in A[9:12]
                     Rotation is in np.reshape(A[0:9], (3,3))
-        
-        
-        sin1, sin2, sin3, sin4, sin5, sin6, sin7 = sin(theta[0]), sin(theta[1]), sin(theta[2]), sin(theta[3]), sin(theta[4]), sin(theta[5]), sin(theta[6])
-        cos1, cos2, cos3, cos4, cos5, cos6, cos7 = cos(theta[0]), cos(theta[1]), cos(theta[2]), cos(theta[3]), cos(theta[4]), cos(theta[5]), cos(theta[6])
-        
-
-        # Calculate pose matrix A using pre-computed expression
-        A = np.array([((((sin5*sin7 + cos5*cos6*cos7)*cos4 - sin4*sin6*cos7)*cos3 + (-sin5*cos6*cos7 + sin7*cos5)*sin3)*cos2 + ((sin5*sin7 + cos5*cos6*cos7)*sin4 + sin6*cos4*cos7)*sin2)*cos1 - (((sin5*sin7 + cos5*cos6*cos7)*cos4 - sin4*sin6*cos7)*sin3 - (-sin5*cos6*cos7 + sin7*cos5)*cos3)*sin1, 
-        ((((sin5*sin7 + cos5*cos6*cos7)*cos4 - sin4*sin6*cos7)*cos3 + (-sin5*cos6*cos7 + sin7*cos5)*sin3)*cos2 + ((sin5*sin7 + cos5*cos6*cos7)*sin4 + sin6*cos4*cos7)*sin2)*sin1 + (((sin5*sin7 + cos5*cos6*cos7)*cos4 - sin4*sin6*cos7)*sin3 - (-sin5*cos6*cos7 + sin7*cos5)*cos3)*cos1, 
-        -(((sin5*sin7 + cos5*cos6*cos7)*cos4 - sin4*sin6*cos7)*cos3 + (-sin5*cos6*cos7 + sin7*cos5)*sin3)*sin2 + ((sin5*sin7 + cos5*cos6*cos7)*sin4 + sin6*cos4*cos7)*cos2, 
-        ((((sin5*cos7 - sin7*cos5*cos6)*cos4 + sin4*sin6*sin7)*cos3 + (sin5*sin7*cos6 + cos5*cos7)*sin3)*cos2 + ((sin5*cos7 - sin7*cos5*cos6)*sin4 - sin6*sin7*cos4)*sin2)*cos1 - (((sin5*cos7 - sin7*cos5*cos6)*cos4 + sin4*sin6*sin7)*sin3 - (sin5*sin7*cos6 + cos5*cos7)*cos3)*sin1, 
-        ((((sin5*cos7 - sin7*cos5*cos6)*cos4 + sin4*sin6*sin7)*cos3 + (sin5*sin7*cos6 + cos5*cos7)*sin3)*cos2 + ((sin5*cos7 - sin7*cos5*cos6)*sin4 - sin6*sin7*cos4)*sin2)*sin1 + (((sin5*cos7 - sin7*cos5*cos6)*cos4 + sin4*sin6*sin7)*sin3 - (sin5*sin7*cos6 + cos5*cos7)*cos3)*cos1, 
-        -(((sin5*cos7 - sin7*cos5*cos6)*cos4 + sin4*sin6*sin7)*cos3 + (sin5*sin7*cos6 + cos5*cos7)*sin3)*sin2 + ((sin5*cos7 - sin7*cos5*cos6)*sin4 - sin6*sin7*cos4)*cos2, 
-        (((sin4*cos6 + sin6*cos4*cos5)*cos3 - sin3*sin5*sin6)*cos2 + (sin4*sin6*cos5 - cos4*cos6)*sin2)*cos1 - ((sin4*cos6 + sin6*cos4*cos5)*sin3 + sin5*sin6*cos3)*sin1, 
-        (((sin4*cos6 + sin6*cos4*cos5)*cos3 - sin3*sin5*sin6)*cos2 + (sin4*sin6*cos5 - cos4*cos6)*sin2)*sin1 + ((sin4*cos6 + sin6*cos4*cos5)*sin3 + sin5*sin6*cos3)*cos1, 
-        -((sin4*cos6 + sin6*cos4*cos5)*cos3 - sin3*sin5*sin6)*sin2 + (sin4*sin6*cos5 - cos4*cos6)*cos2, 
-        ((-(0.207*sin6 + 0.088*cos6)*sin3*sin5 + ((0.207*sin6 + 0.088*cos6)*cos4*cos5 - (0.088*sin6 - 0.207*cos6 + 0.384)*sin4 - 0.0825*cos4)*cos3 + 0.0825*cos3)*cos2 + ((0.207*sin6 + 0.088*cos6)*sin4*cos5 + (0.088*sin6 - 0.207*cos6 + 0.384)*cos4 - 0.0825*sin4 + 0.316)*sin2)*cos1 - ((0.207*sin6 + 0.088*cos6)*sin5*cos3 + ((0.207*sin6 + 0.088*cos6)*cos4*cos5 - (0.088*sin6 - 0.207*cos6 + 0.384)*sin4 - 0.0825*cos4)*sin3 + 0.0825*sin3)*sin1, 
-        ((-(0.207*sin6 + 0.088*cos6)*sin3*sin5 + ((0.207*sin6 + 0.088*cos6)*cos4*cos5 - (0.088*sin6 - 0.207*cos6 + 0.384)*sin4 - 0.0825*cos4)*cos3 + 0.0825*cos3)*cos2 + ((0.207*sin6 + 0.088*cos6)*sin4*cos5 + (0.088*sin6 - 0.207*cos6 + 0.384)*cos4 - 0.0825*sin4 + 0.316)*sin2)*sin1 + ((0.207*sin6 + 0.088*cos6)*sin5*cos3 + ((0.207*sin6 + 0.088*cos6)*cos4*cos5 - (0.088*sin6 - 0.207*cos6 + 0.384)*sin4 - 0.0825*cos4)*sin3 + 0.0825*sin3)*cos1, 
-        -(-(0.207*sin6 + 0.088*cos6)*sin3*sin5 + ((0.207*sin6 + 0.088*cos6)*cos4*cos5 - (0.088*sin6 - 0.207*cos6 + 0.384)*sin4 - 0.0825*cos4)*cos3 + 0.0825*cos3)*sin2 + ((0.207*sin6 + 0.088*cos6)*sin4*cos5 + (0.088*sin6 - 0.207*cos6 + 0.384)*cos4 - 0.0825*sin4 + 0.316)*cos2 + 0.333], dtype='float')
         '''
-        A = self.get_A_2(theta)
+        cos_target  = [np.cos(q) for q in theta_target] # calculate cos(q_i) for each q1 - q7 of theta
+        sin_target  = [np.sin(q) for q in theta_target] # calculate sin(q_i) for each q1 - q7 of theta
+         
+        A = np.array(self.A_lamb(cos_target, sin_target))  # calculate A
+        A = A[:,0]                                         # reshape A 
+
         return A
 
 
@@ -75,14 +64,15 @@ class robot_kinematics:
         delta_list_max      = []            # Max of delta_A matrix
         n_failed_iterations = 0             # n of failed iterations (non converging)
         
-        counter = 0
-        A_current = self.get_pose_from_angles(theta_init)
-        delta_A = (A_target - A_current)
-        theta   = theta_init
+        counter = 0                         # counter for debugging purpose (iterations per completet calculation)
+
+        A_current = self.get_pose_from_angles(theta_init)   # calculate intial A
+        delta_A = (A_target - A_current)                    # calculate intial delta A
+        theta   = theta_init                                # set inital theta
 
         while np.abs(delta_A).max() > err_tol:
-            # TODO: Replace abortion criteria with cartesian equivalent
-            J_theta = self.get_J_2(theta)
+
+            J_theta = self.get_J(theta)
             
             # multiplying by step_size to interpolate between current and target pose
             delta_theta = np.matmul(np.linalg.pinv(J_theta), delta_A * step)
@@ -150,19 +140,9 @@ class robot_kinematics:
         return theta, pos_error
 
 
-    def get_A_2(self, theta_target):
-        # obsolete, just here for reference
-        
-        cos_target  = [np.cos(q) for q in theta_target]
-        sin_target  = [np.sin(q) for q in theta_target]
-         
-        A = np.array(self.A_lamb(cos_target, sin_target))
-        A = A[:,0]
-
-        return A
 
 
-    def get_J_2(self,theta):
+    def get_J(self,theta):
         # current_trigo: sin and cos of actual theta's
         cos_target  = [np.cos(q) for q in theta]
         sin_target  = [np.sin(q) for q in theta]
@@ -185,20 +165,6 @@ if __name__ == '__main__':
     kinematics  = robot_kinematics(debug=True)
 
     theta_init  = np.array([ 0.0,0.0,0.0,-1.0,0.0,1.0,0.0])    # Theta used to init iterative search (in degree)
-    theta_1  = np.array([ 0.085,0.085,0.085,0.085,0.085,0.085,0.085]) 
-    theta_2  = np.array([ 0.095,0.095,0.095,0.095,0.095,0.095,0.095]) 
-    theta_3  = np.array([ 0.105,0.105,0.105,0.105,0.105,0.105,0.105]) 
-    theta_4  = np.array([ 0.115,0.115,0.115,0.115,0.115,0.115,0.115]) 
-    A1 = kinematics.get_pose_from_angles(theta_init)
-    A2 = kinematics.get_pose_from_angles(theta_1)
-    A3 = kinematics.get_pose_from_angles(theta_2)
-    A4 = kinematics.get_pose_from_angles(theta_3)
-    A5 = kinematics.get_pose_from_angles(theta_4)
-    print(A1)
-    print(A2)
-    print(A3)
-    print(A4)
-    print(A5)
     theta_delta = np.array([20, 20, 20, 20, 20, 20, 20])    # Delta from init theta to target theta (in degree)
     theta_target = [np.deg2rad(theta_init[i] + theta_delta[i]) for i in range(7)]
 

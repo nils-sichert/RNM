@@ -21,7 +21,7 @@ class MotionExecutor:
         self.initial_joints = np.array(msg.position)
         self.publish_list = []
         self.move2start_list = []
-        self.movement_speed = 0.02/1000
+        self.movement_speed = 0.01/1000
         self.robot_kinematics = robot_kinematics()
 
     def run(self):
@@ -38,15 +38,28 @@ class MotionExecutor:
         return 0
 
     def move_to_start(self):
+        """
+        Moves robot in desired start position. To get there a linear path between the current joint state and the target joint state 
+        will be interpolatet. The movment speed is be set and should not be above 0.02 m/s.
+        """
         #FIXME mit trajectory_planner kombinieren -> Methode schreiben
+        #FIXME fängt nicht komplett auf Start an (Z-Koordiante??)
+
+        # get current cartesian robot state
         current_pose = self.robot_kinematics.get_pose_from_angles(self.initial_joints)
+
+        # get target cartesian robot state
         start_pose = self.robot_kinematics.get_pose_from_angles(self.publish_list[0])     # /FIXME confirm correction
-        start_join = self.publish_list[0]
+        
+        # calculate distance between cartesian coordinates of current and start position
         dist = np.linalg.norm(start_pose[9:12] -  current_pose[9:12])
+
+        # divide distance by the movement speed to calculate number of nessesary interpolations to reach the movement speed during an updaterate of 1000 Hz.
         steps = int(dist/self.movement_speed)
         delta_joints_per_step = (self.publish_list[0] - self.initial_joints)/steps
+        
+        # set Updaterate to 1000 Hz and publish every 1ms a new joint state
         rate    = rospy.Rate(1000)
-        tmp_list = []
         for j in range(steps+1):
 
             joint = self.initial_joints + j*delta_joints_per_step
@@ -54,9 +67,12 @@ class MotionExecutor:
             msg.data = joint
             self.pub.publish(msg)
             rate.sleep()
-        rospy.logwarn("Moved to Start-Point")
+        rospy.logwarn("Moved to Start-Point")   
 
     def publish_joint(self):
+        """
+        /TODO write comment
+        """
         # publish new joint every 1ms
         rate    = rospy.Rate(1000)
         for i in range(len(self.publish_list)):
@@ -74,7 +90,7 @@ class MotionExecutor:
             rate.sleep()
 
 
-
+# for testing purpose
 def main(argv):
     rospy.init_node("variable_publisher")
     command_topic = rospy.get_param("~command_topic", "/joint_position_example_controller_sim/joint_command")
