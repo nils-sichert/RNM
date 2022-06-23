@@ -56,11 +56,12 @@ class TrajectoryPlanner:
 
 
     '''
-    def __init__(self, limits_dict, safety_factor=0.1, debug=False):
+    def __init__(self, limits_dict, safety_factor=0.1, safety_margin=0.01, debug=False):
         ''' Parameters:
                 limits_dict (dict): Joint limits for pos, vel, acc and jrk
                 debug (bool): Enables debug behavior
                 safety_factor (float): Scales vel, acc and jrk limits
+                safety_margin (float): Distance to min/max pos
         '''
 
         # Our objects
@@ -69,12 +70,12 @@ class TrajectoryPlanner:
         # Constants and parameters
         self.safety_factor  = safety_factor
 
-        self.qlimit_pos_max = np.array(limits_dict["q_pos_max"])                  # Joint space [rad]
-        self.qlimit_pos_min = np.array(limits_dict["q_pos_min"])
+        self.qlimit_pos_max = np.array(limits_dict["q_pos_max"]) - safety_margin    # Joint space [rad]
+        self.qlimit_pos_min = np.array(limits_dict["q_pos_min"]) + safety_margin
         self.qlimit_vel_max = np.array(limits_dict["q_vel_max"]) * safety_factor
         self.qlimit_acc_max = np.array(limits_dict["q_acc_max"]) * safety_factor
         self.qlimit_jrk_max = np.array(limits_dict["q_jrk_max"]) * safety_factor
-        self.plimit_vel_max = np.array(limits_dict["p_vel_max"]) * safety_factor  # Cartesian space [m/s]
+        self.plimit_vel_max = np.array(limits_dict["p_vel_max"]) * safety_factor    # Cartesian space [m/s]
         self.plimit_acc_max = np.array(limits_dict["p_acc_max"]) * safety_factor
         self.plimit_jrk_max = np.array(limits_dict["p_jrk_max"]) * safety_factor
 
