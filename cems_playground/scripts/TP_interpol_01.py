@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Polynomial
-import scipy
+import scipy.optimize
 
 # CLASSES--------------------------------------------------
 class TrajectorySegment:
@@ -405,14 +405,32 @@ class TrajectoryPlanner:
         
         return poly_coefs
 
-    def get_4segments_v2(self, og_wp1, og_wp2, og_v1, target_dur, max_acc, max_jrk, debug=False):
-        ''' Get v2 for a 4 segment quintic interpolation with given target_duration. max_acc and
-            max_jrk are not set to the limits stored in the object to allow exploration
+    def get_4segments_v2(self, target_dur, og_wp1, og_wp2, og_v1, max_vel, max_acc, max_jrk, err_tol=1e-6, debug=False):
+        ''' Get v2 for a 4 segment quintic interpolation with given target_duration. Employs 
+            Newton's Secant method to find v2. max_acc and max_jrk are not set to the limits 
+            stored in the object to allow exploration
+            Returns:
+                est_v2 (float): The estimated v2 to achieve the target duration [ang/s]
+                dur_err (float): Duration error [s]
         '''
+        def f(og_v2):
+            return self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk) - target_dur
 
-    def get_4segments_duration(self, og_wp1, og_wp2, og_v1, og_v2, max_acc, max_jrk, debug=False):
+        x0  = 1e-3 * max_vel
+
+        est_v2  = scipy.optimize.newton(f, x0, tol=err_tol)
+        assert est_v2 <= max_vel, 'Estimated v2 larger than max_vel'
+
+        est_dur = self.get_4segments_duration(og_wp1, og_wp2, og_v1, est_v2, max_vel, max_acc, max_jrk)
+        dur_err = abs(target_dur - est_dur)
+        return est_v2, dur_err
+
+    def get_4segments_duration(self, og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, debug=False):
         ''' Get duration for a 4 segment quintic interpolation. max_acc and max_jrk are not
-            set to the limits stored in the object to allow exploration
+            set to the limits stored in the object to allow exploration.
+            Although seemingly false, the function must allow for unreasonable og_v2 values,
+            in order for the iteration algorithm in get_4segments_v2 to work as intended.
+            If v2 > max_vel, a false, but monotonically decreasing function is applied.
         '''
 
         # Setup
@@ -448,8 +466,11 @@ class TrajectoryPlanner:
         duration  =  2 * ramp_time + (vel_before_ramp_down - vel_after_ramp_up) / max_acc 
         duration  = duration + (dist - dist_ramp_up - dist_cruise - dist_ramp_down) / v2
         
-        if debug:
-            printm(f"og_wp1: {og_wp1:.2f}\tog_wp2: {og_wp2:.2f}\tog_v1: {og_v1:.2f}\tog_v2: {og_v2:.2f}\tmax_acc: {max_acc:.2f}\tmax_jrk: {max_jrk:.2f}\tduration: {duration:.2f}\t")
+        if debug: printm(f"og_wp1: {og_wp1:.2f}\tog_wp2: {og_wp2:.2f}\tog_v1: {og_v1:.2f}\tog_v2: {og_v2:.2f}\tmax_acc: {max_acc:.2f}\tmax_jrk: {max_jrk:.2f}\tduration: {duration:.2f}\t")
+
+        # If v2 > max_vel, return monotonically decreasing values
+        if v2 > max_vel:
+            duration = duration - v2 / max_vel + 1
 
         return duration
 
@@ -736,7 +757,7 @@ if __name__ == '__main__':
     max_jrk     = limits['q_jrk_max'][joint_id]
 
     vel1_f      = np.linspace(0, 1, 6)     # Factor scaling max_vel
-    vel2_f      = np.linspace(0, 1, 1000)
+    vel2_f      = np.linspace(0, 2, 1000)
     
     # Get data
     og_wp1  = waypoints_t[joint_id, pos1]
@@ -749,7 +770,7 @@ if __name__ == '__main__':
         for j, v2_f in enumerate(vel2_f):
 
             og_v2       = v2_f * max_vel
-            d           = trajectory_planer.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_acc, max_jrk)
+            d           = trajectory_planer.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk)
             dur[i][j]   = d
     
     # Plot data
@@ -766,4 +787,10 @@ if __name__ == '__main__':
     plt.suptitle(f'Duration to traverse from wp1 to wp2 depending on v1 and v2\nwp1 = {og_wp1}, wp2={og_wp2}')
     plt.legend(title="v1/max_vel")
     plt.show()
+
+
+    target_dur  = 1.84
+    og_v1       = 0.0 * max_vel
+    est_v2, err = trajectory_planer.get_4segments_v2(target_dur, og_wp1, og_wp2, og_v1, max_vel, max_acc, max_jrk)
+
     a = 1
