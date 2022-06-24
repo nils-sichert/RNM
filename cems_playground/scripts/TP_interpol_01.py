@@ -463,8 +463,51 @@ class TrajectoryPlanner:
         plt.legend(title=legend_label)
         plt.show()
 
-    def get_4segments_v2(self, target_dur, og_wp1, og_wp2, og_v1, max_vel, max_acc, max_jrk, err_tol=1e-6, max_iter=5, debug=False):
+    def plot_duration_vs_alpha(self, og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk):
+        ''' Plots a graph for the duration with a given v1 
+            Parameters:
+                v1_list (List): List of v1 to be plotted
+                v2_marker (float): Marks a v2 value and corresponding duration
+                scaled (bool): Scales x to max_vel
+                
+                v1_list and v2_marker must be scaled, if scaled is true
+                '''
+        # Settings
+        alpha_vals = np.linspace(-1, 1, 1000)
+        x_label    = 'alpha'
+               
+        # Get data       
+        dur = []
+        for alpha in alpha_vals:
+
+            mV = max_vel  #* alpha
+            mA = max_acc  * alpha   
+            mJ = max_jrk  #* alpha  
+
+            d  = self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, mV, mA, mJ)
+            dur.append(d)
         
+        # Plot data
+        fig, axs = plt.subplots(1, 2)
+        for n, (ymin, ymax) in enumerate(zip([-15, 0], [15, 1.2])):
+            axs[n].plot(alpha_vals, dur)
+            
+            axs[n].set_xlabel(x_label)
+            axs[n].set_ylim(ymin, ymax)
+            axs[n].grid()
+
+        axs[0].set_ylabel('Duration [s]')
+        plt.suptitle(f'Duration to traverse from wp1 to wp2 depending on alpha factor for max acc\nwp1 = {og_wp1:.2f}, wp2={og_wp2:.2f}, v1={og_v1:.2f}, v2={og_v2:.2f}')
+        plt.show()
+
+    def get_4segments_v2(self, target_dur, og_wp1, og_wp2, og_v1, max_vel, max_acc, max_jrk, err_tol=1e-6, max_iter=5, debug=False):
+        ''' Get v2 for a 4 segment quintic interpolation with given target_duration. Employs 
+            a simple iterative algorithm to find v2. max_acc and max_jrk are not set to the
+            limits stored in the object to allow exploration
+            Returns:
+                est_v2 (float): The estimated v2 to achieve the target duration [ang/s]
+                dur_err (float): Duration error [s]
+        '''  
         lower_bound = -1 * max_vel
         upper_bound =  1 * max_vel
 
@@ -867,7 +910,7 @@ class TrajectoryPlanner:
 
             # 3. Synchronise duration
             synced_dur = max(initial_dur)
-            print(f"synced_dur: {synced_dur}")
+            print(f"synced_dur: {synced_dur} for wp {wp_id}")
             #synced_dur = 1
 
             # 4. Get synchronized velocities at waypoints
@@ -886,15 +929,19 @@ class TrajectoryPlanner:
         return target_vel
     
 
-select  = 0
+
+# TODO: change alpha factor for max_vel, max_acc, max_jrk
+# TODO: Quintic interpolation for slower joints
+
+select  = 2
 # Test get_trajectory
 if __name__ == '__main__' and select == 0:
 
     limits  = { "q_pos_max" : [ 2.8973, 1.7628, 2.8973,-0.0698, 2.8973, 3.7525, 2.8973],
                 "q_pos_min" : [-2.8973,-1.7628,-2.8973,-3.0718,-2.8973,-0.0175,-2.8973],
                 "q_vel_max" : [ 2.1750,	2.1750,	2.1750,	2.1750, 2.6100, 2.6100, 2.6100],
-                "q_acc_max" : [     15,    7.5,     10,   12.5,     15,     20,     20],
-                "q_jrk_max" : [   7500,   3750,   5000,   6250,   7500,  10000,  10000],
+                "q_acc_max" : [     15/2,    7.5,     10,   12.5,     15,     20,     20],
+                "q_jrk_max" : [   7500/2,   3750,   5000,   6250,   7500,  10000,  10000],
                 "p_vel_max" :   1.7000,
                 "p_acc_max" :  13.0000,
                 "p_jrk_max" : 6500.000 }
@@ -915,13 +962,15 @@ if __name__ == '__main__' and select == 0:
     
 
     velocities_man = []
-    for i in range(7):
+    for i in range(len(waypoints_t)):
         max_vel = max_vel_l[i]
-        velocities_man.append([0, max_vel, max_vel, 0, -max_vel, -max_vel, 0])
+        #velocities_man.append([0, max_vel, max_vel, 0, -max_vel, -max_vel, 0])      # Rise and fall
+        #velocities_man.append([max_vel, -max_vel, -max_vel, max_vel, -max_vel, 0])         # Oscilate
+        velocities_man.append([0, max_vel, max_vel *0.5, max_vel, 0, -max_vel, -max_vel, 0])
 
     velocities_man = np.array(velocities_man)
 
-    #traj_all            = trajectory_planer.get_trajectory(waypoints_t, velocities_man)
+    traj_all            = trajectory_planer.get_trajectory(waypoints_t, velocities_man)
 
     velocities_auto     = trajectory_planer.get_waypoint_parameters(waypoints_t)
     traj_all            = trajectory_planer.get_trajectory(waypoints_t, velocities_auto)
@@ -966,6 +1015,54 @@ if __name__ == '__main__' and select == 1:
     og_wp2  = 10 #waypoints_t[joint_id, pos1 + 1]
     
     trajectory_planer.plot_duration_vs_v2(og_wp1, og_wp2, max_vel, max_acc, max_jrk, v1_list, scaled=False)
+
+    target_dur  = 2
+    og_v1       = 0
+    est_v2, err = trajectory_planer.get_4segments_v2(target_dur, og_wp1, og_wp2, og_v1, max_vel, max_acc, max_jrk)
+
+    a = 1
+
+# Explore duration to og_v1 and max_vel, max_acc, max_jrk relationship 
+if __name__ == '__main__' and select == 2:
+
+    limits  = { "q_pos_max" : [ 2.8973, 1.7628, 2.8973,-0.0698, 2.8973, 3.7525, 2.8973],
+                "q_pos_min" : [-2.8973,-1.7628,-2.8973,-3.0718,-2.8973,-0.0175,-2.8973],
+                "q_vel_max" : [ 2.1750,	2.1750,	2.1750,	2.1750, 2.6100, 2.6100, 2.6100],
+                "q_acc_max" : [     15,    7.5,     10,   12.5,     15,     20,     20],
+                "q_jrk_max" : [   7500,   3750,   5000,   6250,   7500,  10000,  10000],
+                "p_vel_max" :   1.7000,
+                "p_acc_max" :  13.0000,
+                "p_jrk_max" : 6500.000 }
+
+    # Waypoints here in degree (actually in radians)
+    waypoints   = get_list_from_csv("", "waypoints_02.csv")
+    waypoints   = np.array(waypoints)
+
+    # Convert limits to degree, for easier reading
+    keys    = ["q_pos_max", "q_pos_min", "q_vel_max", "q_acc_max" ,"q_jrk_max"]
+    for key in keys:
+        limits[key] = np.rad2deg(limits[key])
+
+    trajectory_planer   = TrajectoryPlanner(limits, safety_factor=1, safety_margin=0)
+
+    # Settings
+    waypoints_t = np.transpose(waypoints)
+    joint_id    = 0
+    pos1        = 0
+    max_vel     = limits['q_vel_max'][joint_id]
+    max_acc     = limits['q_acc_max'][joint_id]
+    max_jrk     = limits['q_jrk_max'][joint_id]
+
+    v1_list     = np.linspace(0, 1, 6)  * max_vel   # Factor scaling max_vel
+ 
+    # Get data
+    og_wp1  = 20 #waypoints_t[joint_id, pos1]
+    og_wp2  = 100 #waypoints_t[joint_id, pos1 + 1]
+    og_v1   = max_vel * 0.5
+    og_v2   = max_vel
+    
+    trajectory_planer.plot_duration_vs_alpha(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk)
+    
 
     target_dur  = 2
     og_v1       = 0
