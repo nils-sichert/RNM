@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from math import cos
+from re import A
 from robot_kinematics import robot_kinematics
 import rospy
 import sys
@@ -30,6 +31,8 @@ class path_planner:
             reader = csv.reader(f, delimiter=",")
             for row in reader:
                 path_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6]),float(row[7]),float(row[8]),float(row[9]),float(row[10]),float(row[11])])
+        rospy.logwarn("Got path cartesian space.")
+
         return path_list
 
     def calculate_path_list_jointspace(self):
@@ -74,13 +77,39 @@ class path_planner:
 
             A_target = tmp_A_list [i+1]
             current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,A_target)
-
+        rospy.logwarn("Got path joint space.")
         return path_list
+
+    def calculate_target_path(self, A_target):
+        #TODO clean writing, double entries!
+        path_list = self.get_path_list_cartesian()
+        A_intersection = self.calculate_intersection(A_target)
+        with open(os.path.join(os.path.dirname(__file__),"Path/planned_path_cartesian.csv"),'r+') as file:
+            file.truncate(0)
+
+        with open((os.path.join(os.path.dirname(__file__),"Path/planned_path_cartesian.csv")), mode="a", newline="") as f:
+                writer = csv.writer(f, delimiter=",")
+                for i in range(len(path_list)):
+                    writer.writerow(path_list[i])
+                writer.writerow(A_intersection)
+                writer.writerow(A_target)
+
+    def calculate_intersection(self, A_target):
+        pos_target = np.array(A_target[9:]).reshape((3,1))
+        rot_mat = np.array(A_target[0:9]).reshape((3,3))
+        intersection_hight = 0.2
+        a,b,c,d,e,f,g,h,i = A_target[0], A_target[1], A_target[2], A_target[3], A_target[4], A_target[5], A_target[6], A_target[7], A_target[8]
+        n = float(intersection_hight/(g+h+i))
+        pos_intersection = np.matmul(rot_mat,np.ones((3,1)))*n + pos_target
+        A_intersection = [a,b,c,d,e,f,g,h,i,pos_intersection[0][0],pos_intersection[1][0], pos_intersection[2][0]]
         
+        return A_intersection
 
 # for testing purpose  
 
 if __name__ == '__main__':
     path_planner = path_planner()
-    #path_planner.calculate_path_list_jointspace()
+    A_target = [1.0,0.0,0.0,0.0,-1.0,-0.0,0.0,0.0,-1.0,0.4,0,0.3]
+    path_planner.calculate_target_path(A_target)
     path_planner.calculate_path_list_jointspace()
+    #path_planner.calculate_path_list_jointspace()
