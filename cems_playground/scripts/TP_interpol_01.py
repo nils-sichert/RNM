@@ -1,6 +1,5 @@
 import csv
 import os
-from turtle import left
 from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
@@ -437,7 +436,7 @@ class TrajectoryPlanner:
         for i, og_v1 in enumerate(v1_vals):
             for j, og_v2 in enumerate(v2_vals):
 
-                d           = self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk)
+                d           = self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, enforce_monotony=True)
                 dur[i][j]   = d
         
         # Plot data
@@ -455,7 +454,7 @@ class TrajectoryPlanner:
                 axs[n].axvline(v2_marker, color='red', lw=0.5)
 
                 for i, og_v1 in enumerate(v1_list):
-                    d_marker = (self.get_4segments_duration(og_wp1, og_wp2, og_v1, v2_marker, max_vel, max_acc, max_jrk))
+                    d_marker = (self.get_4segments_duration(og_wp1, og_wp2, og_v1, v2_marker, max_vel, max_acc, max_jrk, enforce_monotony=True))
                     axs[n].axhline(d_marker, color='red', lw=0.5)
 
         axs[0].set_ylabel('Duration [s]')
@@ -489,8 +488,10 @@ class TrajectoryPlanner:
 
             if not alpha_marker == None: 
                 d  = self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc  * alpha_marker, max_jrk)
-                axs[n].axvline(alpha_marker, color='red', lw=0.5, label=f'alpha = {alpha_marker:.2f}, t = {d:.2f}')
+                axs[n].axvline(alpha_marker, color='red', lw=0.5, label=f'alpha = {alpha_marker:.4f}, t = {d:.4f}')
                 axs[n].axhline(d, color='red', lw=0.5)
+                axs[1].set_xlim(max(alpha_marker - 5 * abs(alpha_marker), -1), min(alpha_marker + 5 * abs(alpha_marker), 1))
+                axs[1].set_ylim(0.8 * d, 1.2 * d)
                 plt.legend(title='marker at')
 
 
@@ -513,12 +514,12 @@ class TrajectoryPlanner:
         for _ in range(max_iter):
 
             v2_vals = np.linspace(lower_bound, upper_bound, 10000)
-            t_vals  = [self.get_4segments_duration(og_wp1, og_wp2, og_v1, v2, max_vel, max_acc, max_jrk) for v2 in v2_vals]
+            t_vals  = [self.get_4segments_duration(og_wp1, og_wp2, og_v1, v2, max_vel, max_acc, max_jrk, enforce_monotony=True) for v2 in v2_vals]
             t_vals  = np.array(t_vals)
             closest_idx = (np.abs(t_vals - target_dur)).argmin()
             
             v2_est  = v2_vals[closest_idx]
-            dur_est = self.get_4segments_duration(og_wp1, og_wp2, og_v1, v2_est, max_vel, max_acc, max_jrk)
+            dur_est = self.get_4segments_duration(og_wp1, og_wp2, og_v1, v2_est, max_vel, max_acc, max_jrk, enforce_monotony=True)
             err     = abs(dur_est - target_dur)
 
             if err <= err_tol: break
@@ -541,8 +542,8 @@ class TrajectoryPlanner:
 
         # In case no convergence, return -max_vel or +max_vel
         if err <= err_tol:
-            dur_est_minus   = self.get_4segments_duration(og_wp1, og_wp2, og_v1, -max_vel, max_vel, max_acc, max_jrk)
-            dur_est_plus    = self.get_4segments_duration(og_wp1, og_wp2, og_v1,  max_vel, max_vel, max_acc, max_jrk)
+            dur_est_minus   = self.get_4segments_duration(og_wp1, og_wp2, og_v1, -max_vel, max_vel, max_acc, max_jrk, enforce_monotony=True)
+            dur_est_plus    = self.get_4segments_duration(og_wp1, og_wp2, og_v1,  max_vel, max_vel, max_acc, max_jrk, enforce_monotony=True)
             if abs(dur_est_minus - target_dur) < abs(dur_est_plus - target_dur):
                 v2_est  = dur_est_minus
                 err     = abs(dur_est_minus - target_dur)
@@ -563,9 +564,9 @@ class TrajectoryPlanner:
                 dur_err (float): Duration error [s]
         '''
         def f1(og_v2):
-            return self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk) - target_dur
+            return self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, enforce_monotony=True) - target_dur
         def f2(og_v2):
-            return self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk) + target_dur
+            return self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, enforce_monotony=True) + target_dur
 
         x0  = 1e-6 * max_vel
         try:
@@ -576,7 +577,7 @@ class TrajectoryPlanner:
             except RuntimeError:
                 est_v2 = self.get_4segments_v2(target_dur, og_wp1, og_wp2, og_v1, max_vel, max_acc, max_jrk)
 
-        est_dur = self.get_4segments_duration(og_wp1, og_wp2, og_v1, est_v2, max_vel, max_acc, max_jrk)
+        est_dur = self.get_4segments_duration(og_wp1, og_wp2, og_v1, est_v2, max_vel, max_acc, max_jrk, enforce_monotony=True)
         dur_err = abs(target_dur - est_dur)
 
         # Check if v2 is too large
@@ -589,7 +590,7 @@ class TrajectoryPlanner:
 
         return est_v2, dur_err
 
-    def get_4segments_alpha(self, target_dur, og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, err_tol=1e-6, max_iter=5, debug=False):
+    def get_4segments_alpha(self, target_dur, og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, err_tol=1e-6, max_iter=10, debug=False):
         ''' Get alpha factor for a 4 segment quintic interpolation with given target_duration. 
             Employs a simple iterative algorithm to find alpha. max_acc and max_jrk are not set to the
             limits stored in the object to allow exploration
@@ -609,11 +610,12 @@ class TrajectoryPlanner:
             closest_idx = np.nanargmin(np.abs(t_vals - target_dur))
 
             alpha_est   = alpha[closest_idx]
-            max_acc_m   = alpha_est * max_vel
-            dur_est     = self.get_4segments_duration(og_wp1, og_wp2, og_v1, max_acc_m, max_vel, max_acc, max_jrk)
+            max_acc_m   = alpha_est * max_acc
+            dur_est     = self.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc_m, max_jrk)
             err         = abs(dur_est - target_dur)
 
-            if err <= err_tol: break
+            if err <= err_tol: 
+                break
 
             if closest_idx == 0:
                 lower_bound = alpha[closest_idx - 0]
@@ -630,7 +632,7 @@ class TrajectoryPlanner:
         if not 0 < alpha_est <= 1:
             self.plot_duration_vs_alpha(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, alpha_marker=alpha_est)
             assert 0, f"alpha has invalid value: {alpha_est}"
-        if err <= err_tol: printm(f"Warning: Duration error too large in alpha estimation. Returning alpha = {alpha_est:.4f}")
+        if err >= err_tol: printm(f"Warning: Duration error too large in alpha estimation. Returning alpha = {alpha_est:.4f} with error = {err:.4f}")
 
         return alpha_est, err
 
@@ -642,6 +644,8 @@ class TrajectoryPlanner:
                 If v2 > max_vel, a linearly decreasing function is applied
             max_acc and max_jrk are not set to the limits stored in the object to allow exploration.
         '''
+
+        if max_acc == 0: return np.nan
 
         # Setup
         wp_increase = og_wp1 < og_wp2           # Flag for swapped waypoints (in case og_wp1 > og_wp2)
@@ -671,13 +675,14 @@ class TrajectoryPlanner:
 
         vel_after_ramp_up    = v1 + (max_acc * ramp_time) / 2   # V_a
         vel_before_ramp_down = v2 - (max_acc * ramp_time) / 2   # V_b
-        
+    
         dist_ramp_up    = max_acc * (ramp_time ** 2) * (1/4 - 1/(np.pi**2)) + v1 * ramp_time
         dist_cruise     = (vel_before_ramp_down ** 2 - vel_after_ramp_up ** 2) / (2 * max_acc)
         dist_ramp_down  = max_acc * (ramp_time ** 2) * (1/4 + 1/(np.pi**2)) + vel_before_ramp_down * ramp_time
                     
         duration  =  2 * ramp_time + (vel_before_ramp_down - vel_after_ramp_up) / max_acc 
-        duration  = duration + (dist - dist_ramp_up - dist_cruise - dist_ramp_down) / v2
+        if not v2 == 0:
+            duration  = duration + (dist - dist_ramp_up - dist_cruise - dist_ramp_down) / v2
         
         if debug: printm(f"og_wp1: {og_wp1:.2f}\tog_wp2: {og_wp2:.2f}\tog_v1: {og_v1:.2f}\tog_v2: {og_v2:.2f}\tmax_acc: {max_acc:.2f}\tmax_jrk: {max_jrk:.2f}\tduration: {duration:.2f}\t")
 
@@ -979,7 +984,7 @@ class TrajectoryPlanner:
 # TODO: Rename 4segements to something better
 # TODO: package max_vel, max_acc, max_jrk in function signatures to something better
 # TODO: Include alpha factor in get_trajectory
-# TODO: Validate get_4segment_alpha function
+# DONE: Validate get_4segment_alpha function
 # DONE: alpha_marker in plot_duration_vs_alpha doesnt work as intended
 
 select  = 2
@@ -1110,10 +1115,10 @@ if __name__ == '__main__' and select == 2:
     og_v1   = max_vel * 0.5
     og_v2   = max_vel
      
-    target_dur   = 2
-    alpha_est, _ = trajectory_planer.get_4segments_alpha(target_dur, og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk)
-    achieved_dur = trajectory_planer.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc * alpha_est, max_jrk)
-    print(f'Target duration: {target_dur:.2f}, achieved duration: {achieved_dur:.2f} with alpha: {alpha_est:.4f}')
+    target_dur      = 0.67
+    alpha_est, err  = trajectory_planer.get_4segments_alpha(target_dur, og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk)
+    achieved_dur    = trajectory_planer.get_4segments_duration(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc * alpha_est, max_jrk)
+    print(f'Target duration: {target_dur:.4f}, achieved duration: {achieved_dur:.4f} (err: {err:.4f}) with alpha: {alpha_est:.4f}')
     trajectory_planer.plot_duration_vs_alpha(og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, alpha_marker=alpha_est)
     
 
