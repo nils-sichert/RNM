@@ -4,7 +4,6 @@ import numpy as np
 
 class DhCreator:
     def __init__(self):
-        print("Kinematic: Start loading inital parameters ...")
         # creating joint angles as symbols
         q1, q2, q3, q4, q5, q6, q7 = symbols('theta_1 theta_2 theta_3 theta_4 theta_5 theta_6 theta_7')
         joint_angles = [q1, q2, q3, q4, q5, q6, q7]
@@ -48,7 +47,7 @@ class DhCreator:
         Q = Matrix(joint_angles)
         J = A.jacobian(Q)  # computing the Jacobian symbolically
 
-
+        # not nessesary
         # Replace cos/sin terms
         c1, c2, c3, c4, c5, c6, c7 = symbols('c1, c2, c3, c4, c5, c6, c7')
         s1, s2, s3, s4, s5, s6, s7 = symbols('s1, s2, s3, s4, s5, s6, s7')
@@ -60,11 +59,16 @@ class DhCreator:
             A = A.subs(sin(q), s)
             J = J.subs(cos(q), c)
             J = J.subs(sin(q), s)
-
+        # not nessesary
 
         # Lambdify
         self.A_lamb  = lambdify([(c1, c2, c3, c4, c5, c6, c7), (s1, s2, s3, s4, s5, s6, s7)], A, 'numpy')
         self.J_lamb  = lambdify([(c1, c2, c3, c4, c5, c6, c7), (s1, s2, s3, s4, s5, s6, s7)], J, 'numpy')
+
+        """
+        self.A_lamb  = lambdify([(q1,q2,q3,q4,q5,q6,q7)], A, 'numpy')
+        self.J_lamb  = lambdify([(q1,q2,q3,q4,q5,q6,q7)], J, 'numpy')
+        """
 
     def get_A_lamb(self):
         return self.A_lamb

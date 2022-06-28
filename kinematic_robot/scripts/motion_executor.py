@@ -49,25 +49,31 @@ class MotionExecutor:
         current_pose = self.robot_kinematics.get_pose_from_angles(self.initial_joints)
 
         # get target cartesian robot state
-        start_pose = self.robot_kinematics.get_pose_from_angles(self.publish_list[0])     # /FIXME confirm correction
-        
-        # calculate distance between cartesian coordinates of current and start position
-        dist = np.linalg.norm(start_pose[9:12] -  current_pose[9:12])
+        start_pose = self.robot_kinematics.get_pose_from_angles(self.publish_list[0])     # /FIXME confirm correction and error handling if List is empty
+        delta_pose = start_pose - current_pose
+        err_tol = 1e-2
+        if np.abs(delta_pose).max() > err_tol:
+            # calculate distance between cartesian coordinates of current and start position
+            dist = np.linalg.norm(start_pose[9:12] -  current_pose[9:12])
 
-        # divide distance by the movement speed to calculate number of nessesary interpolations to reach the movement speed during an updaterate of 1000 Hz.
-        steps = int(dist/self.movement_speed)
-        delta_joints_per_step = (self.publish_list[0] - self.initial_joints)/steps
-        
-        # set Updaterate to 1000 Hz and publish every 1ms a new joint state
-        rate    = rospy.Rate(1000)
-        for j in range(steps+1):
+            # divide distance by the movement speed to calculate number of nessesary interpolations to reach the movement speed during an updaterate of 1000 Hz.
+            steps = int(dist/self.movement_speed)
+            delta_joints_per_step = (self.publish_list[0] - self.initial_joints)/steps
+            
+            # set Updaterate to 1000 Hz and publish every 1ms a new joint state
+            rate    = rospy.Rate(1000)
+            for j in range(steps+1):
 
-            joint = self.initial_joints + j*delta_joints_per_step
-            msg = Float64MultiArray()
-            msg.data = joint
-            self.pub.publish(msg)
-            rate.sleep()
-        rospy.logwarn("Moved to Start-Point")   
+                joint = self.initial_joints + j*delta_joints_per_step
+                msg = Float64MultiArray()
+                msg.data = joint
+                self.pub.publish(msg)
+                rate.sleep()
+            rospy.logwarn("Moved to Start-Point")   
+        else:
+            rospy.logwarn("Be on start position")
+        
+        return
 
     def publish_joint(self):
         """
@@ -75,6 +81,8 @@ class MotionExecutor:
         """
         # publish new joint every 1ms
         rate    = rospy.Rate(1000)
+
+        rospy.logwarn("Start publishing joints.")
         for i in range(len(self.publish_list)):
             
             joint = self.publish_list[i]
@@ -83,7 +91,7 @@ class MotionExecutor:
             self.pub.publish(msg)
             rate.sleep()
         
-        rospy.logwarn("Published all Joints")
+        rospy.logwarn("Published all Joints.")
         rospy.logwarn("repeat last join:" + str(joint))
         while not rospy.is_shutdown():
             self.pub.publish(msg)

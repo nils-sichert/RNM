@@ -16,7 +16,7 @@ class trajectory_planner_simple:
         self.robot_kinematics = robot_kinematics()
         
         # settings
-        self.movement_speed = 0.01/1000 #[m/s]
+        self.movement_speed = 0.025/1000 #[m/s]
 
     def create_path(self):
         """
