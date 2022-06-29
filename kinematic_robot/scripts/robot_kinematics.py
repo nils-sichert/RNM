@@ -38,7 +38,7 @@ class robot_kinematics:
         return A
 
 
-    def get_angles_from_pose(self, theta_init, A_target, step=0.01, err_tol=1e-3):
+    def get_angles_from_pose(self, theta_init, A_target, step=0.01, err_tol=1e-4):
         ''' Get joint angles for a target pose. Utilizing pre-computed expressions using DH-parameters.
             
             Parameters:
@@ -85,6 +85,7 @@ class robot_kinematics:
             delta_sqsum = sum(delta_A**2)
             delta_max   = max(abs(delta_A))
             counter += 1
+            """            
             if delta_sqsum >= sum(delta_list_sqsum[-n_last_entries:])/n_last_entries and len(delta_list_sqsum) >= n_last_entries:
                 delta_list_sqsum.append(delta_sqsum)
                 n_failed_iterations += 1
@@ -134,13 +135,10 @@ class robot_kinematics:
             fig.suptitle('Convergence Behaviour')
             plt.grid()
             plt.show()
-
+            """
         pos_error   = np.linalg.norm(delta_A[9:12])
         print(counter)
         return theta, pos_error
-
-
-
 
     def get_J(self,theta):
         # current_trigo: sin and cos of actual theta's
@@ -164,13 +162,14 @@ if __name__ == '__main__':
     
     kinematics  = robot_kinematics(debug=True)
 
-    theta_init  = np.array([ 0.0,0.0,0.0,-1.0,0.0,1.0,0.0])    # Theta used to init iterative search (in degree)
-    theta_delta = np.array([20, 20, 20, 20, 20, 20, 20])    # Delta from init theta to target theta (in degree)
+    theta_init  = np.array([-1.158190647974349, -0.8326139204752586, 1.5252210481375978, -2.6538870173015146, 0.3408476617932567, 2.0319040652910867, 0.22719384101198778])    # Theta used to init iterative search (in degree)
+    theta_delta = np.array([-1.16675,-1.07474, 1.15409,-1.7767, 0.37539, 1.057256, 0.808336])    # Delta from init theta to target theta (in degree)
     theta_target = [np.deg2rad(theta_init[i] + theta_delta[i]) for i in range(7)]
 
     A_current   = kinematics.get_pose_from_angles(theta_init)
     A_target    = kinematics.get_pose_from_angles(theta_target)
-    print(A_target)
+    print(A_current)
+   
 
     q_ik, error = kinematics.get_angles_from_pose(theta_init, A_target)
     print(np.rad2deg(q_ik))
@@ -181,27 +180,3 @@ if __name__ == '__main__':
         profiler.disable()
         stats = pstats.Stats(profiler).sort_stats('cumtime')
         stats.print_stats(20)
-
-
-    # Result of code profiling
-    # Unsurprisingly get_J and get_A consume most of the time
-    #
-    #   ncalls    tottime  percall cumtime  percall filename:lineno(function)
-    #         1     0.004    0.004   40.203   40.203 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:22(inverse_kinematic)
-    #        55     0.984    0.018   23.418    0.426 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:58(get_J)
-    # 140479/137920 1.821    0.000   19.936    0.000 /home/rnm/.local/lib/python3.8/site-packages/sympy/core/decorators.py:58(__sympifyit_wrapper)
-    #        57     0.206    0.004   16.862    0.296 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:37(get_A)
-    # 26056/17553   0.486    0.000   14.918    0.001 /home/rnm/.local/lib/python3.8/site-packages/sympy/core/cache.py:67(wrapper)
-    #     16447     0.424    0.000   14.187    0.001 /home/rnm/.local/lib/python3.8/site-packages/sympy/core/decorators.py:224(_func)
-    #     94532     2.559    0.000    9.720    0.000 /home/rnm/.local/lib/python3.8/site-packages/sympy/core/numbers.py:1293(__mul__)
-    #
-    # After mod
-    #     ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-    #         1    0.007    0.007    0.200    0.200 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:23(inverse_kinematic)
-    #        55    0.002    0.000    0.085    0.002 <__array_function__ internals>:2(pinv)
-    #    279/59    0.007    0.000    0.084    0.001 {built-in method numpy.core._multiarray_umath.implement_array_function}
-    #        55    0.077    0.001    0.082    0.001 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:71(get_J)
-    #        55    0.012    0.000    0.081    0.001 /usr/lib/python3/dist-packages/numpy/linalg/linalg.py:1890(pinv)
-    #        55    0.002    0.000    0.034    0.001 <__array_function__ internals>:2(svd)
-    #        55    0.016    0.000    0.030    0.001 /usr/lib/python3/dist-packages/numpy/linalg/linalg.py:1468(svd)
-    #        57    0.022    0.000    0.024    0.000 /home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/kinematic.py:50(get_A)

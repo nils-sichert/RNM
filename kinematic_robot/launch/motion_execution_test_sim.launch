@@ -1,8 +1,10 @@
 <?xml version="1.0" ?>
 <launch>
     <include file="$(find franka_example_controllers)/launch/joint_position_example_controller_sim.launch" />
-    <node name="motion_executor" pkg="kinematic_robot" type="motion_executor.py">
+    <node name="motion_executor" pkg="kinematic_robot" type="motion_manager.py">
         <param name="command_topic" value="/joint_position_example_controller_sim/joint_command" />
+        <param name="has_a_path_flag" value="True" />
+   
     </node>
 
 </launch>

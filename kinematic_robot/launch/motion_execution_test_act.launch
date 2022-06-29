@@ -5,8 +5,9 @@
     -->
     
     
-    <node name="motion_executor" pkg="kinematic_robot" type="motion_executor.py">
+    <node name="motion_executor" pkg="kinematic_robot" type="motion_manager.py">
         <param name="command_topic" value="/joint_position_example_controller/joint_command" />
+        <param name="new_plan_flag" value="False" />    
     </node>
 
 </launch>

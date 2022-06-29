@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from math import cos
 from robot_kinematics import robot_kinematics
 import rospy
@@ -15,7 +16,7 @@ class trajectory_planner_simple:
         self.robot_kinematics = robot_kinematics()
         
         # settings
-        self.movement_speed = 0.01/1000 #[m/s]
+        self.movement_speed = 0.025/1000 #[m/s]
 
     def create_path(self):
         """
@@ -55,8 +56,9 @@ class trajectory_planner_simple:
                     writer.writerow(sample_joint)
 
             current_pose = next_pose
-
-        return 0
+        
+        rospy.logwarn("Calculated 1ms commands.")
+        return 
 
 
 # for test purposes
