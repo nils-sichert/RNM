@@ -48,10 +48,10 @@ class ProcessManager:
         self.motion_manager = MotionManager()
 
         # Load Ros Parameter
+        self.MOVEMENT_SPEED = rospy.get_param("~/movement_speed", 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
 
         # Ros Publisher
         self.goal_pose_reached_pub = rospy.Publisher("~goal_pose_reached", Bool, queue_size=1)
-
 
         # Ros Subscriber
         self.target_acquired_sub = rospy.Subscriber('~/target_acquired', Bool, self.callback_target_acquired)
@@ -124,13 +124,13 @@ class ProcessManager:
                 if not self.old_goal_id == self.act_goal_id:
                     self.old_goal_id = self.act_goal_id
                     self.set_goal_pose_reached_pub = False
-                    self.motion_manager.go_to_goal_js(self.goal_pose_js) #FIXME Add function
+                    self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED) #FIXME Add function
                     self.set_goal_pose_reached_pub = True
 
 
                 # Do until target acquired
                 if self.s2_target_acquired:                 # Is True if VS has published needle goal pose. Will be published True by cv
-                    self.motion_manager.move2start(self.get_init_pose)
+                    self.motion_manager.move2goal_js(self.get_init_pose, self.MOVEMENT_SPEED)
                                                             # TODO In case of aborting program due to Safety barrier, write all values into file
                     self.s1_cv_ready = False
                     self.reset_user_execution_command()
@@ -139,7 +139,7 @@ class ProcessManager:
 
             # State 2: Move to pre-incision point--------------------------------------------------
             if self.s2_target_acquired and self.user_execution_command:
-                self.s3_pre_incision_reached = self.motion_manager.move_start2preincision(self.needle_goal_pose)  # FIXME Add function, 
+                self.s3_pre_incision_reached = self.motion_manager.move_start2preincision(self.needle_goal_pose, self.MOVEMENT_SPEED)  # FIXME Add function, 
                                                                                                 # calculate two list with help of needle goal:   
                                                                                                 # 1. Start -> Pre-Inj: calculated_trajectory_start2preinc.csv
                                                                                                 # 2. Pre-Inj -> Target: calculated_trajectory_preinj2target.csv

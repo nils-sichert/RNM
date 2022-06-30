@@ -17,16 +17,13 @@ class MotionManager:
     def __init__(self, command_topic, topic_joint_states, topic_goal_pose, err_tol=1e-3, debug=False):
 
         # ROS communication
+
+        # Subscriber
         if "sim" in command_topic:
-            self.curr_joint_states = rospy.wait_for_message("/joint_states", JointState, rospy.Duration(10))
+            self.current_joint_state_sub    = rospy.Subscriber('/joint_states', JointState, self.callback_joint_states, queue_size=1)
         else:
-            self.curr_joint_states = rospy.wait_for_message("/franka_state_controller/joint_states_desired", JointState, rospy.Duration(10))
-  
-        #self.pub_joint_commands = rospy.Publisher(name=topic_joint_command, data_class=Float64MultiArray, queue_size=20)
-        self.sub_joint_states   = rospy.Subscriber(name=topic_joint_states, data_class=JointState, callback=self.callback_joint_states, queue_size=10)
-        #self.sub_goal_pose      = rospy.Subscriber(name=topic_goal_pose, data_class=Float64MultiArray, callback=self.callback_goal_pose, queue_size=10)
-        self.current_theta      = self.curr_joint_states.position
-        
+            self.current_joint_state_sub    = rospy.Subscriber('/franka_state_controller/joint_states_desired', JointState, self.callback_joint_states, queue_size=1)
+
         # Objects
         self.path_planner       = path_planner(self.current_theta)
         self.trajectory_planner = trajectory_planner_simple()
@@ -34,32 +31,43 @@ class MotionManager:
         self.motion_executor    = MotionExecutor(command_topic)
 
         # Constants and parameters
-        #self.curr_joint_states  = rospy.wait_for_message(topic_joint_states, JointState, rospy.Duration(10)).position
-        #FIXME Pose2Angle error, can not create path when having different rotation in endefector
-        #FIXME Offset neadle!!
-        # Wir bekommen ein Target A, welches zuruckgerechnet werden muss bis zum Joint, dass ist Zielposition
+        """FIXME Pose2Angle error, can not create path when having different rotation in endefector
+        Offset neadle!! Wir bekommen ein Target A, welches zuruckgerechnet werden muss bis zum Joint, dass ist Zielposition
+        """
+
         #self.pos_target         = [0.37982467,  0.35923062,  0.43909587]
         #self.pos_target         = [0.31982467,  0.05923062,  0.23909587]
+        
+        self.current_theta      = self.curr_joint_states.position
         self.current_A          = self.kinematics.get_pose_from_angles(self.current_theta)
-        rospy.logwarn("Current A:" + str(self.current_A))
         self.current_rot        = self.current_A[:9]
         self.curr_goal_pose     = [self.current_rot[0], self.current_rot[1], self.current_rot[2], self.current_rot[3], self.current_rot[4], self.current_rot[5], self.current_rot[6], self.current_rot[7], self.current_rot[8], self.pos_target[0], self.pos_target[1], self.pos_target[2]]
         self.err_tolerance      = err_tol
 
-    def
+        # Debug
+        rospy.logwarn("Current A:" + str(self.current_A))
 
-    def callback_joint_states(self, msg_in : JointState):
+    def callback_joint_states(self, msg_in):
         ''' Callback function for the topic_joint_states. Stores current angles in object variable'''
         self.current_joint_state = msg_in.position
 
-    def callback_goal_pose(self, msg_in : Float64MultiArray):
-        ''' Callback function for the topic_goal_pose. Stores current goal pose in object variable 
-            and sets the has_a_plan flag to False
-        '''
-        self.current_goal_pose  = msg_in.data
-        self.has_a_plan         = False
-        # TODO Input verification -> msg_in.data should be a pose matrix
- 
+  
+    def move2goal_js(self, GoalPose, MOVEMENT_SPEED):
+        """
+        Move the robot's endefector to goal pose given in joint space. 
+        To do so:
+        1. interpolate actual to goal joint angles and sample to 1ms steps
+        2. Load trajectory and execute motion
+        """
+        filename = "calculated_trajectory_to_goal_1ms.csv"
+        self.trajectory_planner.create_path(GoalPose, MOVEMENT_SPEED, filename)
+        self.motion_executor.run(filename)
+        return
+
+    def move_start2preincision(self, needle_goal_pose, MOVEMENT_SPEED):
+        self.path_planner.calculate_target_path()
+        pass
+
     def plan_motion(self):
         # initialize list planing
         # TODO write listplanner
