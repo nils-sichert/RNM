@@ -52,13 +52,17 @@ class ProcessManager:
 
         # Load ROS Parameter
         self.MOVEMENT_SPEED = rospy.get_param("~/movement_speed", 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
-
+        self.init_pose = rospy.get_param('~init_pose', [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06])
         # ROS Publisher
-        self.pub_goal_pose_reached  = rospy.Publisher("~goal_pose_reached", Int16, queue_size=1)
+        self.pub_goal_pose_reached  = rospy.Publisher("/goal_pose_reached", Int16, queue_size=1)
 
         # ROS Subscriber
         self.sub_needle_goal_pose   = rospy.Subscriber('~/needle_goal_pose', Float64MultiArray, self.callback_needle_goal_pose)
         self.sub_goal_pose_js       = rospy.Subscriber('~/goal_pose_js', Float64MultiArray, self.callback_goal_pose_js )
+
+        # Ros Helper/ Debuging
+        self.user_execution_command = rospy.set_param('/user_execution_command', False)
+
 
         time.sleep(1)
 
@@ -67,16 +71,17 @@ class ProcessManager:
         ''' Callback function for the goal_pose_js topic. Stores current goal pose in object variable 
             and sets the s2_target_acquired flag = True 
         '''
-        self.s2_target_acquired     = True
-        self.goal_pose_js           = msg.data[0:7]
-        self.crr_goal_pose_id       = msg.data[8]
-        rospy.logwarn("[PM] Got Goal_Pose_JS with ID:" + self.crr_goal_pose_id)
+        self.s2_target_acquired     = False
+        self.goal_pose_js           = msg.data[0:-1]
+        self.crr_goal_pose_id       = msg.data[-1]   
+        rospy.logwarn("[PM] Got Goal_Pose_JS with ID:" + str(self.crr_goal_pose_id)) 
 
     def callback_needle_goal_pose(self, msg : JointState):
         ''' Callback function for the target pose of the needle containing a location (x,y,z) and 
             a roatation matrice (R); position[0:9] = Rotation & position [9:12] = position
         '''
         # /TODO: received message will probably be in the same format as in callback_goal_pose_js
+        self.s2_target_acquired     = True
         self.needle_goal_pose = msg.position
     
     # Publish Methods
@@ -91,13 +96,8 @@ class ProcessManager:
     def get_user_execution_command(self):
         ''' /TODO
         '''
-        self.user_execution_command = rospy.get_param('~user_execution_command', False)
-    
-    def get_init_pose(self):
-        ''' /TODO
-        '''
-        self.init_pose = rospy.get_param('~init_pose')
-
+        self.user_execution_command = rospy.get_param('/user_execution_command', False)
+   
     def is_topic_published(self, topic_name : str):
         ''' Checks the rostopic list for the given topic 
         '''
@@ -139,7 +139,7 @@ class ProcessManager:
                 if not self.old_goal_pose_id == self.crr_goal_pose_id:
                     self.old_goal_pose_id = self.crr_goal_pose_id
                     self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)    #FIXME Add function
-                    self.pub_goal_pose_reached(self.crr_goal_pose_id)
+                    self.pub_goal_pose_reached.publish(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
 
 
                 # Exit State - when target acquired
@@ -213,5 +213,5 @@ class ProcessManager:
 
 if __name__ == '__main__':
 
-    ProcessManager()
-    ProcessManager.main_process()
+    process_manager = ProcessManager()
+    process_manager.main_process()
