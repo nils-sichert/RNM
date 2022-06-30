@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import csv
 import os
+from pickle import TRUE
 import sys
 
 import numpy as np
@@ -25,10 +26,18 @@ class MotionManager:
             self.current_joint_state_sub    = rospy.Subscriber('/franka_state_controller/joint_states_desired', JointState, self.callback_joint_states, queue_size=1)
 
         # Objects
-        self.path_planner       = path_planner(self.current_theta)
+        self.path_planner       = path_planner()
         self.trajectory_planner = trajectory_planner_simple()
         self.kinematics         = robot_kinematics()
         self.motion_executor    = MotionExecutor(command_topic)
+
+        # File-Names
+         ## Path
+        self.filename_path_preinsertion    = "calculated_path_preinsertion.csv"
+        self.filename_path_insertion    = "calculated_path_insertion.csv"
+         ## Trajectory
+        self.filename_trajectory_preinsertion    = "created_trajectory_to_goal_1ms.csv"
+        self.filename_trajectory_insertion       = "created_trajectory_to_target_1ms.csv"
 
         # Constants and parameters
         """FIXME Pose2Angle error, can not create path when having different rotation in endefector
@@ -38,11 +47,16 @@ class MotionManager:
         #self.pos_target         = [0.37982467,  0.35923062,  0.43909587]
         #self.pos_target         = [0.31982467,  0.05923062,  0.23909587]
         
+        # TODO clean up
         self.current_theta      = self.curr_joint_states.position
         self.current_A          = self.kinematics.get_pose_from_angles(self.current_theta)
         self.current_rot        = self.current_A[:9]
         self.curr_goal_pose     = [self.current_rot[0], self.current_rot[1], self.current_rot[2], self.current_rot[3], self.current_rot[4], self.current_rot[5], self.current_rot[6], self.current_rot[7], self.current_rot[8], self.pos_target[0], self.pos_target[1], self.pos_target[2]]
         self.err_tolerance      = err_tol
+
+        # Load Parameter
+
+        self.max_dist_between_supports = rospy.get_param("~max_dist_between_supports", 0.01)
 
         # Debug
         rospy.logwarn("Current A:" + str(self.current_A))
@@ -59,30 +73,33 @@ class MotionManager:
         1. interpolate actual to goal joint angles and sample to 1ms steps
         2. Load trajectory and execute motion
         """
-        filename = "calculated_trajectory_to_goal_1ms.csv"
-        self.trajectory_planner.create_path(GoalPose, MOVEMENT_SPEED, filename)
-        self.motion_executor.run(filename)
+        self.trajectory_planner.create_trajectory(self.current_joint_state, GoalPose, MOVEMENT_SPEED, self.filename_trajectory_preinsertion) #FIXME input order
+        self.motion_executor.run(self.filename_trajectory_preinsertion)
         return
 
     def move_start2preinsertion(self, needle_goal_pose, MOVEMENT_SPEED):
-        self.path_planner.calculate_target_path()
-        pass
+        self.path_planner.calculate_target_path(self.current_joint_state, needle_goal_pose, self.get_max_dist_between_waypoints(), self.filename_path_preinsertion_cartesian, self.filename_path_insertion_cartesian, self.filename_path_preinsertion_joint_space, self.filename_path_insertion_joint_space)
+        self.trajectory_planner.create_simple_trajectory(self.filename_path_preinsertion, self.filename_trajectory_preinsertion, MOVEMENT_SPEED)
+        self.motion_executor.run(self.filename_trajectory_preinsertion)
+        return True
+
+    def move_preinsertion2target(self, MOVEMENT_SPEED):
+        self.trajectory_planner.create_simple_trajectory(self.filename_path_insertion, self.filename_trajectory_insertion, MOVEMENT_SPEED)
+        self.motion_executor.run(self.filename_trajectory_insertion)
+        return True
 
     def plan_motion(self):
         # initialize list planing
         # TODO write listplanner
         self.path_planner.calculate_target_path(self.curr_goal_pose)
         self.path_planner.calculate_path_list_jointspace()
-        self.trajectory_planner.create_path()
+        #self.trajectory_planner.create_path()
         return
-
-    def move2start(self):
-        self.motion_executor.move_to_start()
-        return
-
-    def motion_execution(self):
-        self.motion_executor.run()
-        return
+    
+    def get_max_dist_between_waypoints(self):
+        # maximum distance between each waypoint (|x/y/z|), no rotation is taken into account
+        max_dist_between_supports = rospy.get_param("~max_dist_between_supports", 0.01)
+        return max_dist_between_supports
 
 def main(argv):
 
