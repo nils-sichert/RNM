@@ -44,8 +44,8 @@ class ProcessManager:
         # ROS inits
         rospy.init_node('process_manager', anonymous=True)
 
-        # instances
-        self.mm = MotionManager()
+        # Objects
+        self.motion_manager = MotionManager()
 
         # Load Ros Parameter
 
@@ -124,14 +124,14 @@ class ProcessManager:
                 if not self.old_goal_id == self.act_goal_id:
                     self.old_goal_id = self.act_goal_id
                     self.set_goal_pose_reached_pub = False
-                    self.mm.go_to_goal_js(self.goal_pose_js) #FIXME Add function
+                    self.motion_manager.go_to_goal_js(self.goal_pose_js) #FIXME Add function
                     self.set_goal_pose_reached_pub = True
 
 
                 # Do until target acquired
                 if self.s2_target_acquired:                 # Is True if VS has published needle goal pose. Will be published True by cv
-                    self.mm.move2start(self.get_init_pose)
-                                                            # TODO In case of aborting programm due to Safety barrier, write all values into file
+                    self.motion_manager.move2start(self.get_init_pose)
+                                                            # TODO In case of aborting program due to Safety barrier, write all values into file
                     self.s1_cv_ready = False
                     self.reset_user_execution_command()
                     rospy.logwarn("[PM] Has successful completed CV.")
@@ -139,7 +139,7 @@ class ProcessManager:
 
             # State 2: Move to pre-incision point--------------------------------------------------
             if self.s2_target_acquired and self.user_execution_command:
-                self.s3_pre_incision_reached = self.mm.move_start2preincision(self.needle_goal_pose)  # FIXME Add function, 
+                self.s3_pre_incision_reached = self.motion_manager.move_start2preincision(self.needle_goal_pose)  # FIXME Add function, 
                                                                                                 # calculate two list with help of needle goal:   
                                                                                                 # 1. Start -> Pre-Inj: calculated_trajectory_start2preinc.csv
                                                                                                 # 2. Pre-Inj -> Target: calculated_trajectory_preinj2target.csv
@@ -155,7 +155,7 @@ class ProcessManager:
 
             # State 3: Execute incision------------------------------------------------------------
             if self.s3_pre_incision_reached and self.user_execution_command:
-                self.s4_reverse_active = self.mm.move_preincision2target()                      # FIXME Add function
+                self.s4_reverse_active = self.motion_manager.move_preincision2target()                      # FIXME Add function
                                                                                                 # execute motion executor: calculated_trajectory_preinc2target.csv
                                                                                                 # return True
                 # If finished
@@ -167,7 +167,7 @@ class ProcessManager:
 
             # State 4: Reverse incision------------------------------------------------------------
             if self.s4_reverse_active and self.user_execution_command:
-                self.mm.move_target2start
+                self.motion_manager.move_target2start
                 self.reset_user_execution_command()
                 rospy.logwarn("[PM] Has successful reversed Robot to inital pose.")
 

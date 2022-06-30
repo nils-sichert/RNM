@@ -14,7 +14,7 @@ from trajectory_planner_simple import trajectory_planner_simple
 from motion_executor import MotionExecutor
 
 class MotionManager:
-    def __init__(self, command_topic, topic_joint_states, topic_goal_pose, has_a_path_flag, err_tol=1e-3, debug=False):
+    def __init__(self, command_topic, topic_joint_states, topic_goal_pose, err_tol=1e-3, debug=False):
 
         # ROS communication
         if "sim" in command_topic:
@@ -26,7 +26,8 @@ class MotionManager:
         self.sub_joint_states   = rospy.Subscriber(name=topic_joint_states, data_class=JointState, callback=self.callback_joint_states, queue_size=10)
         #self.sub_goal_pose      = rospy.Subscriber(name=topic_goal_pose, data_class=Float64MultiArray, callback=self.callback_goal_pose, queue_size=10)
         self.current_theta      = self.curr_joint_states.position
-        # Our objects
+        
+        # Objects
         self.path_planner       = path_planner(self.current_theta)
         self.trajectory_planner = trajectory_planner_simple()
         self.kinematics         = robot_kinematics()
@@ -38,17 +39,14 @@ class MotionManager:
         #FIXME Offset neadle!!
         # Wir bekommen ein Target A, welches zuruckgerechnet werden muss bis zum Joint, dass ist Zielposition
         #self.pos_target         = [0.37982467,  0.35923062,  0.43909587]
-        self.pos_target         = [0.31982467,  0.05923062,  0.23909587]
+        #self.pos_target         = [0.31982467,  0.05923062,  0.23909587]
         self.current_A          = self.kinematics.get_pose_from_angles(self.current_theta)
         rospy.logwarn("Current A:" + str(self.current_A))
         self.current_rot        = self.current_A[:9]
         self.curr_goal_pose     = [self.current_rot[0], self.current_rot[1], self.current_rot[2], self.current_rot[3], self.current_rot[4], self.current_rot[5], self.current_rot[6], self.current_rot[7], self.current_rot[8], self.pos_target[0], self.pos_target[1], self.pos_target[2]]
-        self.has_a_plan         = has_a_path_flag     # Indicates if a motion execution plan is present
-
         self.err_tolerance      = err_tol
-        self.counter = 0
-        self.max_dist_between_stutzpunkten = 0.01
 
+    def
 
     def callback_joint_states(self, msg_in : JointState):
         ''' Callback function for the topic_joint_states. Stores current angles in object variable'''
@@ -61,25 +59,7 @@ class MotionManager:
         self.current_goal_pose  = msg_in.data
         self.has_a_plan         = False
         # TODO Input verification -> msg_in.data should be a pose matrix
-
-    def has_active_goal_pose(self):
-        ''' Returns true if a goal pose has been set and is not reached yet.
-            Returns false if no goal pose has been set or goal pose has been reached
-        '''
-
-        if self.curr_goal_pose == None:
-            return False #FIXME change into False!!
-        
-        #curr_pose   = self.kinematics.get_pose_from_angles(self.curr_joint_states.position)
-        #goal_pose   = self.curr_goal_pose
-        #error       = np.linalg.norm(curr_pose[9:12] - goal_pose[9:12])
-
-        #if error <= self.err_tolerance:
-        #    return False
-        else:
-            return True
-    
-
+ 
     def plan_motion(self):
         # initialize list planing
         # TODO write listplanner
