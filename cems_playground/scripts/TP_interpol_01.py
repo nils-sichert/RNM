@@ -160,10 +160,6 @@ def get_initial_velocities(waypoints_t, limits):
             elif wp[j, k - 1] > wp[j, k] > wp[j, k + 1]: joints_vel[j, k] = - max_vel
             else: joints_vel[j, k] = 0
 
-            # TODO override here for debug
-            joints_vel[j, k] = max_vel
-            pass
-
     joints_vel[:, 0] = 0
     joints_vel[:,-1] = 0
 
@@ -590,7 +586,7 @@ class TrajectoryPlanner:
 
         return est_v2, dur_err
 
-    def get_4segments_alpha(self, target_dur, og_wp1, og_wp2, og_v1, og_v2, max_vel, max_acc, max_jrk, err_tol=1e-6, max_iter=10, debug=False):
+    def get_4segments_alpha(self, target_dur, og_wp1, og_wp2, og_v1, og_v2, kin_limits, err_tol=1e-6, max_iter=10, debug=False):
         ''' Get alpha factor for a 4 segment quintic interpolation with given target_duration. 
             Employs a simple iterative algorithm to find alpha. max_acc and max_jrk are not set to the
             limits stored in the object to allow exploration
@@ -598,6 +594,7 @@ class TrajectoryPlanner:
                 alpha_est (float): The estimated alpha to achieve the target duration [1]
                 dur_err (float): Duration error [s]
         '''
+        (max_vel, max_acc, max_jrk) = kin_limits
         lower_bound = 0
         upper_bound = 1
 
@@ -694,6 +691,79 @@ class TrajectoryPlanner:
       
         return duration
 
+    def get_sequence_limits(self, og_wp1, og_wp2, og_v1, og_v2, kin_limits, debug=False):
+        ''' Returns the max v1, v2 and min duration for a sequence between two waypoints.
+            If working correctly, at most one of max_v1 and max_v2 should divert from og_v1
+            and og_v2.
+            Parameters:
+                og_wp1 (float): First waypoint in sequence 
+                og_wp2 (float): Second waypoint in sequence
+                og_v1 (float):  First velocity in sequence
+                og_v2 (float):  Ideal second velocity in sequence
+                kin_limits (tuple): kinematic limits (max_vel, max_acc, max_jrk)
+            Returns:
+                max_v1 (float): Maximum achievable v1 (first velocity in sequence)
+                max_v2 (float): Maximum achievable v2 (second velocity in sequence)
+                duration (float):  Minimum achievable duration of the sequence
+        '''
+        (max_vel, max_acc, max_jrk) = kin_limits
+        if max_acc == 0: return np.nan
+
+        # Setup
+        wp_increase = og_wp1 < og_wp2           # Flag for swapped waypoints (in case og_wp1 > og_wp2)
+        v_increase  = abs(og_v1) < abs(og_v2)   # Flag for swapped velocities (in case og_v1 > og_v2)
+        dist        = abs(og_wp1 - og_wp2)
+        ramp_time   = (np.pi * max_acc) / (2 * max_jrk)
+
+        # Mirroring to fit standard interpolation pattern
+        if v_increase:      # Keep velocities
+            v1  = og_v1
+            v2  = og_v2
+        else:               # Swap velocities
+            v1  = og_v2
+            v2  = og_v1
+
+        if not wp_increase:     # Swap waypoints and negate velocities
+            v1  = - v1
+            v2  = - v2
+
+        v2 = max_vel
+
+        # Loop in case v2 is too large
+        while True:
+            vel_after_ramp_up    = v1 + (max_acc * ramp_time) / 2   # V_a
+            vel_before_ramp_down = v2 - (max_acc * ramp_time) / 2   # V_b
+        
+            dist_ramp_up         = max_acc * (ramp_time ** 2) * (1/4 - 1/(np.pi**2)) + v1 * ramp_time
+            dist_cruise          = (vel_before_ramp_down ** 2 - vel_after_ramp_up ** 2) / (2 * max_acc)
+            dist_ramp_down       = max_acc * (ramp_time ** 2) * (1/4 + 1/(np.pi**2)) + vel_before_ramp_down * ramp_time                      
+
+            if dist_ramp_up + dist_cruise + dist_ramp_down > dist: 
+                #printm(f"Warning: v2 too large, reducing v2 from {v2:.4f} to {v2 - 0.02 * max_vel:.4f}")
+                v2 = v2 - 0.005 * max_vel
+                assert v2 > 0, "investigate this"
+            else:
+                break
+
+        # Shift velocities back
+        if v_increase:      # Keep velocities
+            max_v1  = v1
+            max_v2  = v2
+        else:               # Swap velocities
+            max_v1  = v2
+            max_v2  = v1
+
+        if not wp_increase:     # Swap waypoints and negate velocities
+            max_v1  = - max_v1
+            max_v2  = - max_v2
+        
+        assert not v2 == 0, "investigate this"
+        duration  =  2 * ramp_time + (vel_before_ramp_down - vel_after_ramp_up) / max_acc 
+        duration  = duration + (dist - dist_ramp_up - dist_cruise - dist_ramp_down) / v2
+        
+        if debug: printm(f"og_wp1: {og_wp1:.2f}\tog_wp2: {og_wp2:.2f}\t|og_v1: {og_v1:.2f}\tout_v1: {max_v1:.2f}\t|og_v2: {og_v2:.2f}\tout_v2: {max_v2:.2f}\t|min_duration: {duration:.4f}\t")
+    
+        return max_v1, max_v2, duration
 
     def get_trajectory(self, waypoints_t : np.array, velocities_t : np.array, alphas_t : np.array):
         ''' Returns a trajectory object for given
@@ -893,12 +963,17 @@ class TrajectoryPlanner:
             pass
         pass
 
-    def get_waypoint_parameters(self, waypoints_t : np.array, initial_vel, debug=False):
+    def get_waypoint_parameters(self, waypoints_t : np.array, ideal_vel_t : np.array, debug=False):
         ''' To synchronise all joints, they must be at a waypoint at the same time. 
             To achieve this, the max acceleration for each joint at each waypoint is computed.
             The max acceleration is coded into a list containing the fractions of max_acc that
             need to be used. This factor is called alpha: used_max_acc = alpha * actual_max_acc
             
+            For each waypoint
+                For each joint
+
+            1.  Get max v1, max v2 and min duration for each transition /TODO: write this in better
+
             For each waypoint
                 For each joint
 
@@ -910,10 +985,12 @@ class TrajectoryPlanner:
                 This is done numerically.           
             
             Parameters:
+                ideal_vel_t (List): Ideal velocities for each joint and waypoint [joint_id][wp] (+-max_vel, 0) 
                 waypoints_t (List): Waypoint positions for joints [joint_id][wp]
             Returns:
                 alphas_t (List): Alpha factors corresponding to each joint and waypoint [joint_id][wp]
         '''
+        adjust_vel  = ideal_vel_t                       # Adjusted vel, init with ideal vel [joint_id][wp]
         initial_dur = np.zeros(waypoints_t.shape[0])    # [joint_id]
         synced_dur  = 0                                 # Scalar
         alphas      = np.zeros(waypoints_t.shape)       # Alpha factors [joint_id][wp]
@@ -921,42 +998,55 @@ class TrajectoryPlanner:
         num_joints  = waypoints_t.shape[0]
         num_wp      = waypoints_t.shape[1]
 
+        # Kinematic limits in a list
+        kin_limits_l = [(self.qlimit_vel_max[joint_id], self.qlimit_acc_max[joint_id], self.qlimit_jrk_max[joint_id]) for joint_id in range(num_joints)]
+
         # Iterate over waypoints
         for wp_id in range(num_wp - 1):
 
             # 1. Get initial durations for each waypoint transition
             for joint_id in range(num_joints):
-                wp1     = waypoints_t[joint_id, wp_id]
-                wp2     = waypoints_t[joint_id, wp_id + 1]
-                v1      = initial_vel[joint_id, wp_id]
-                v2      = initial_vel[joint_id, wp_id + 1]
-                max_vel = self.qlimit_vel_max[joint_id]
-                max_acc = self.qlimit_acc_max[joint_id]     # use alpha = 1
-                max_jrk = self.qlimit_jrk_max[joint_id]
+                wp1         = waypoints_t[joint_id, wp_id]
+                wp2         = waypoints_t[joint_id, wp_id + 1]
+                v1          = adjust_vel[joint_id, wp_id]
+                v2          = adjust_vel[joint_id, wp_id + 1]
+                kin_limits  = kin_limits_l[joint_id]
                 
-                initial_dur[joint_id]   = self.get_4segments_duration(wp1, wp2, v1, v2, max_vel, max_acc, max_jrk)
+                max_v1, max_v2, min_d           = self.get_sequence_limits(wp1, wp2, v1, v2, kin_limits, debug=debug)
+                adjust_vel[joint_id, wp_id]     = min(min([max_v1, v1]), max([max_v1, v1]), key=abs)
+                adjust_vel[joint_id, wp_id + 1] = min(min([max_v2, v2]), max([max_v2, v2]), key=abs)
+
+                initial_dur[joint_id]           = min_d
 
             # 2. Synchronise duration
             synced_dur = max(initial_dur)
-            print(f"synced_dur: {synced_dur:.4f} for wp {wp_id}")
+            if debug: print(f"synced_dur: {synced_dur:.4f} for wp {wp_id}")
 
             # 4. Get synchronized alphas at waypoints
             for joint_id in range(num_joints):
-                wp1     = waypoints_t[joint_id, wp_id]
-                wp2     = waypoints_t[joint_id, wp_id + 1]
-                v1      = initial_vel[joint_id, wp_id]
-                v2      = initial_vel[joint_id, wp_id + 1]
-                max_vel = self.qlimit_vel_max[joint_id]
-                max_acc = self.qlimit_acc_max[joint_id]
-                max_jrk = self.qlimit_jrk_max[joint_id]
+                wp1         = waypoints_t[joint_id, wp_id]
+                wp2         = waypoints_t[joint_id, wp_id + 1]
+                v1          = adjust_vel[joint_id, wp_id]
+                v2          = adjust_vel[joint_id, wp_id + 1]
+                kin_limits  = kin_limits_l[joint_id]
 
-                alphas[joint_id, wp_id], err = self.get_4segments_alpha(synced_dur, wp1, wp2, v1, v2, max_vel, max_acc, max_jrk, debug=True)
-        
-                if debug:
-                    print(f'dur err: {err} for joint {joint_id} wp1 {wp1} to wp2 {wp2}')
+                alpha, err                      = self.get_4segments_alpha(synced_dur, wp1, wp2, v1, v2, kin_limits, debug=debug)
+                alphas[joint_id, wp_id]         = alpha
 
-        alphas[joint_id, -1] = 1     # Dummy alphas for last waypoint
-        return alphas
+                kin_limits_mod  = (self.qlimit_vel_max[joint_id], self.qlimit_acc_max[joint_id] * alpha, self.qlimit_jrk_max[joint_id])
+
+                max_v1, max_v2, min_d           = self.get_sequence_limits(wp1, wp2, v1, v2, kin_limits_mod, debug=debug)
+                adjust_vel[joint_id, wp_id]     = min(min([max_v1, v1]), max([max_v1, v1]), key=abs)
+                adjust_vel[joint_id, wp_id + 1] = min(min([max_v2, v2]), max([max_v2, v2]), key=abs)
+
+                if debug: print(f'dur err: {err} for joint {joint_id} wp1 {wp1} to wp2 {wp2}')
+
+
+        # Dummy alphas for last waypoint
+        for joint_id in range(num_joints):
+            alphas[joint_id, -1] = 1     
+
+        return alphas, adjust_vel
     
  
 # /TODO: change alpha factor for max_vel, max_acc, max_jrk
@@ -965,6 +1055,8 @@ class TrajectoryPlanner:
 # /TODO: package max_vel, max_acc, max_jrk in function signatures to something better
 # /TODO: Include alpha factor in get_waypoint_parameters
 # /TODO: Include alpha factor in get_trajectory
+# /TODO: Fix velocity jumps
+#   /TODO: Precompute max velocities and min durations
 # DONE: Validate get_4segment_alpha function
 # DONE: alpha_marker in plot_duration_vs_alpha doesnt work as intended
 
@@ -994,21 +1086,50 @@ if __name__ == '__main__' and select == 0:
 
     waypoints_t         = np.transpose(waypoints)
     trajectory_planer   = TrajectoryPlanner(limits, safety_factor=1, safety_margin=0)
+
+    num_joints  = waypoints_t.shape[0]
+    num_wp      = waypoints_t.shape[1]
     
 
     velocities_man = []
-    for i in range(len(waypoints_t)):
+    for i in range(num_joints):
         max_vel = max_vel_l[i]
         #velocities_man.append([0, max_vel, max_vel, 0, -max_vel, -max_vel, 0])      # Rise and fall
         #velocities_man.append([max_vel, -max_vel, -max_vel, max_vel, -max_vel, 0])         # Oscilate
-        velocities_man.append([0, max_vel, max_vel, max_vel, 0, -max_vel, -max_vel, 0])
-
+        #velocities_man.append([0, max_vel, max_vel, max_vel, 0, -max_vel, -max_vel, 0])
+        velocities_man.append([0,  max_vel, max_vel, 0, -max_vel, -max_vel, 0])  
+        
     velocities_man  = np.array(velocities_man)
-    #alphas_man      = np.array([[1, 0.5, 1, 0.25, 1, 0.01, 1, 1]])
-    alphas_auto     = trajectory_planer.get_waypoint_parameters(waypoints_t, velocities_man, debug=True)
+    velocities_man2 = np.array(velocities_man)
+    alphas_man      = np.array([[1, 1, 1, 1, 1, 1, 1, 1]])
 
-    traj_all        = trajectory_planer.get_trajectory(waypoints_t, velocities_man, alphas_auto)
+    if False:
+        for wp_id in range(num_wp - 1):
+            for joint_id in range(num_joints):
+
+                wp1     = waypoints_t[joint_id, wp_id]
+                wp2     = waypoints_t[joint_id, wp_id + 1]
+                v1      = velocities_man[joint_id, wp_id]
+                v2      = velocities_man[joint_id, wp_id + 1]
+                max_vel = limits['q_vel_max'][joint_id]
+                max_acc = limits['q_acc_max'][joint_id]     # use alpha = 1
+                max_jrk = limits['q_jrk_max'][joint_id]
+                kin_limits = (max_vel, max_acc, max_jrk)
+
+                new_v1, new_v2, min_d = trajectory_planer.get_sequence_limits(wp1, wp2, v1, v2, kin_limits, debug=True)
+                velocities_man[joint_id, wp_id]     = min(min([new_v1, v1]), max([new_v1, v1]), key=abs)
+                velocities_man[joint_id, wp_id + 1] = min(min([new_v2, v2]), max([new_v2, v2]), key=abs)
+
+        traj_all        = trajectory_planer.get_trajectory(waypoints_t, velocities_man, alphas_man)
+
+    if True:
+        alphas, adjust_vel  = trajectory_planer.get_waypoint_parameters(waypoints_t, velocities_man, debug=False)
+        traj_all            = trajectory_planer.get_trajectory(waypoints_t, adjust_vel, alphas)
+    
     a = 1
+    # 1.0  [0, 0.08641924983360325, 0.08956084248719304, 0.23141924983360324, 0.23456084248719303]
+    # 0.5  [0, 0.01470464799700072, 0.01627544432379563, 0.3047046479970007, 0.3062754443237956]
+    # 0.25 [0, 0.008348255870836374, 0.009133654034233829, 0.43116825587083646, 0.4319536540342339]
 
 # Explore duration to og_v1 and og_v2 relationship 
 if __name__ == '__main__' and select == 1:
