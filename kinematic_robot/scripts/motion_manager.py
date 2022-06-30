@@ -18,7 +18,8 @@ class MotionManager:
     def __init__(self, command_topic, err_tol=1e-3, debug=False):
 
         # ROS communication
-        rospy.init_node("motion_manager")
+        #rospy.init_node("motion_manager")
+        
         # Subscriber
         if "sim" in command_topic:
             self.current_joint_state_sub    = rospy.Subscriber('/joint_states', JointState, self.callback_joint_states, queue_size=1)

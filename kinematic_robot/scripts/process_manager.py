@@ -48,7 +48,7 @@ class ProcessManager:
         rospy.init_node('process_manager', anonymous=True)
 
         # Objects
-        self.motion_manager = MotionManager()
+        self.motion_manager = MotionManager('/joint_position_example_controller_sim/joint_command')  # TODO: replace with get params
 
         # Load ROS Parameter
         self.MOVEMENT_SPEED = rospy.get_param("~/movement_speed", 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
@@ -113,6 +113,8 @@ class ProcessManager:
 
 
     def main_process(self):
+
+        rospy.logwarn("[PM] Started main process")
 
         rate = rospy.Rate(1000)
         while not rospy.is_shutdown():
