@@ -595,6 +595,14 @@ class TrajectoryPlanner:
                 dur_err (float): Duration error [s]
         '''
         (max_vel, max_acc, max_jrk) = kin_limits
+
+        # /FIXME: This is a hotfix which is not investigated thorougly
+        if og_v1 == og_v2:
+            alpha_est   = 1
+            err         = abs(target_dur - abs(og_wp1 - og_wp2) / og_v1)
+            return alpha_est, err
+
+
         lower_bound = 0
         upper_bound = 1
 
@@ -1033,11 +1041,12 @@ class TrajectoryPlanner:
                 alpha, err                      = self.get_4segments_alpha(synced_dur, wp1, wp2, v1, v2, kin_limits, debug=debug)
                 alphas[joint_id, wp_id]         = alpha
 
-                kin_limits_mod  = (self.qlimit_vel_max[joint_id], self.qlimit_acc_max[joint_id] * alpha, self.qlimit_jrk_max[joint_id])
-
-                max_v1, max_v2, min_d           = self.get_sequence_limits(wp1, wp2, v1, v2, kin_limits_mod, debug=debug)
-                adjust_vel[joint_id, wp_id]     = min(min([max_v1, v1]), max([max_v1, v1]), key=abs)
-                adjust_vel[joint_id, wp_id + 1] = min(min([max_v2, v2]), max([max_v2, v2]), key=abs)
+# TODO here !
+                #kin_limits_mod  = (self.qlimit_vel_max[joint_id], self.qlimit_acc_max[joint_id] * alpha, self.qlimit_jrk_max[joint_id])
+#
+                #max_v1, max_v2, min_d           = self.get_sequence_limits(wp1, wp2, v1, v2, kin_limits_mod, debug=debug)
+                #adjust_vel[joint_id, wp_id]     = min(min([max_v1, v1]), max([max_v1, v1]), key=abs)
+                #adjust_vel[joint_id, wp_id + 1] = min(min([max_v2, v2]), max([max_v2, v2]), key=abs)
 
                 if debug: print(f'dur err: {err} for joint {joint_id} wp1 {wp1} to wp2 {wp2}')
 
@@ -1056,7 +1065,7 @@ class TrajectoryPlanner:
 # /TODO: Include alpha factor in get_waypoint_parameters
 # /TODO: Include alpha factor in get_trajectory
 # /TODO: Fix velocity jumps
-#   /TODO: Precompute max velocities and min durations
+#   /DONE: Precompute max velocities and min durations
 # DONE: Validate get_4segment_alpha function
 # DONE: alpha_marker in plot_duration_vs_alpha doesnt work as intended
 
@@ -1127,9 +1136,6 @@ if __name__ == '__main__' and select == 0:
         traj_all            = trajectory_planer.get_trajectory(waypoints_t, adjust_vel, alphas)
     
     a = 1
-    # 1.0  [0, 0.08641924983360325, 0.08956084248719304, 0.23141924983360324, 0.23456084248719303]
-    # 0.5  [0, 0.01470464799700072, 0.01627544432379563, 0.3047046479970007, 0.3062754443237956]
-    # 0.25 [0, 0.008348255870836374, 0.009133654034233829, 0.43116825587083646, 0.4319536540342339]
 
 # Explore duration to og_v1 and og_v2 relationship 
 if __name__ == '__main__' and select == 1:

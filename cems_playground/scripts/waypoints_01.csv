@@ -23,6 +23,16 @@ Single joint test
 0
 [0, max_vel, max_vel, 0, -max_vel, -max_vel, 0]
 
+2 joints, close stress test
+0,   0
+5,   15
+50,  60
+100, 90
+95,  85
+90,  40
+0,   0
+[0, max_vel, max_vel, 0, -max_vel, -max_vel, 0]
+
  0,   0
 40,  10
 20,  20
