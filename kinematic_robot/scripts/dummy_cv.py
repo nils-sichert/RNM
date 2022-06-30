@@ -17,16 +17,19 @@ class DummyCV:
 
         self.pub_target_acquired    = rospy.Publisher('~/target_acquired', Bool, queue_size=1)
         self.pub_needle_goal_pose   = rospy.Publisher('~/needle_goal_pose', Float64MultiArray, queue_size=1)
-        self.pub_goal_pose_js       = rospy.Publisher('~/goal_pose_cs', Float64MultiArray, queue_size=1 )
+        self.pub_goal_pose_js       = rospy.Publisher("~/goal_pose_js", Float64MultiArray, queue_size=1)
         
-        self.sub_goal_pose_reached  = rospy.Subscriber("~goal_pose_reached", Int16, callback_goal_pose_reached)
-        self.sub_user_input_dummy   = rospy.Subscriber('~/user_input_dummy', String, callback_user_input_dummy)
+        self.sub_goal_pose_reached  = rospy.Subscriber("~/goal_pose_reached", Int16, self.callback_goal_pose_reached)
+        self.sub_user_input_dummy   = rospy.Subscriber('~/user_input_dummy', String, self.callback_user_input_dummy)
+
+        time.sleep(1)
 
         # Flags
         self.at_desired_goal_pose   = False
         self.go_to_next_pose        = False
 
         # Misc
+        self.joint_state_topic      = "/joint_states"
         self.pose_list_dir          = pose_list_dir
         self.pose_list              = np.load(os.path.join(os.path.dirname(__file__), pose_list_dir))
         self.curr_pose_id           = 0
@@ -57,13 +60,21 @@ class DummyCV:
         '''
         self.curr_pose_id   = pose_id
 
-        pose_js.append(pose_id)
+        pose_js = np.append(pose_js, pose_id)
         msg         = Float64MultiArray()
         msg.data    = pose_js
 
         self.pub_goal_pose_js.publish(msg)
+        self.pub_goal_pose_js.publish(msg)
 
         rospy.logwarn(f"[DummyCV] Send new goal_pose_js with ID {pose_id}")
+
+    def get_curr_joint_state(self):
+        ''' Get actual current joint states
+        '''
+        act_curr_pose   = rospy.wait_for_message(self.joint_state_topic, JointState, rospy.Duration(10))
+        act_curr_pose   = np.array(act_curr_pose.position)
+        return act_curr_pose
 
     def important_stuff(self):
         ''' This function simulates important stuff which takes time
@@ -81,7 +92,6 @@ class DummyCV:
         self.pose_list       = np.load(os.path.join(os.path.dirname(__file__), self.pose_list_dir))
         self.go_to_next_pose = True
 
-
         # Loop over all desired waypoints
         for pose_id, pose in enumerate(self.pose_list):
 
@@ -91,9 +101,11 @@ class DummyCV:
 
             # Wait to reach desired goal pose
             while not self.at_desired_goal_pose:
-                pass
+                if self.at_desired_goal_pose:
+                    break
 
             # Do something important
+            #act_curr_pose = self.get_curr_joint_state()
             self.important_stuff()
 
         
@@ -106,7 +118,7 @@ class DummyCV:
 
 if __name__ == '__main__':
     
-    dummy_cv = DummyCV('/path')
+    dummy_cv = DummyCV('Path/collected_joint_list.npy')
     dummy_cv.do_stuff_with_recorded_poses()
     
     rospy.spin()
