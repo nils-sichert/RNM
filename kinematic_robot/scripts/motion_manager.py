@@ -108,6 +108,39 @@ def main(argv):
     #rospy.logwarn("Operation Mode " + str(operation_mode))
     motion_manager      = MotionManager(command_topic, topic_joint_states, topic_goal_pose, has_a_path_flag)
 
+    # Pre-run
+    #   launch launchfile with:
+    #       publishers: joint_states
+    #       parameter set up für topic names
+    #       init_pose (joint space)
+    # 
+    # Setup MM
+    #   get topic names -> als rosparam aus launchfile
+    #   get init_post (parameter)
+    #   publisher init
+    #       goal_pose_reached (True=reached/False=notreached)
+    #   subscriber init
+    #       joint_state (js list) für aktuelle pose
+    #       goal_pose_js (js list) für aktuelle goal pose im joint space
+    #       goal_pose_cs (A matrix) für aktuelle goal pose im cartesian space
+    #   param
+    #       needle_goal_published (bool) from CV when target found
+
+    # Loop
+    rate = rospy.Rate(1000)
+    while not rospy.is_shutdown():
+        # Received new goal pose for CV
+        # If old goal pose != new goal pose && !needle_goal_published
+        #   then goal_pose_reached = false
+
+        # Received new goal pose for incision
+        #   Move to init_pose (for collision avoidance)
+        #   Wait for user input (to change needle)
+        #   Move to to pre-incision point
+        #   Wait
+        #   Execute incision
+
+
     # Loop
 
     rate = rospy.Rate(1000)
