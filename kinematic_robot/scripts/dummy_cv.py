@@ -15,7 +15,6 @@ class DummyCV:
         # ROS
         rospy.init_node('dummy_cv', anonymous=True)
 
-        self.pub_target_acquired    = rospy.Publisher('~/target_acquired', Bool, queue_size=1)
         self.pub_needle_goal_pose   = rospy.Publisher('~/needle_goal_pose', Float64MultiArray, queue_size=1)
         self.pub_goal_pose_js       = rospy.Publisher("~/goal_pose_js", Float64MultiArray, queue_size=1)
         
@@ -41,7 +40,7 @@ class DummyCV:
         self.go_to_next_pose = True
         rospy.logwarn("[DummyCV] User input received")
 
-    def callback_goal_pose_reached(self, msg):
+    def callback_goal_pose_reached(self, msg : Float64MultiArray):
         ''' Checks the received confirmation ID and sets at_desired_goal_pose flag accordingly
         '''
         received_id = msg.data
