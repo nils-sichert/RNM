@@ -64,7 +64,7 @@ class MotionManager:
         self.motion_executor.run(filename)
         return
 
-    def move_start2preincision(self, needle_goal_pose, MOVEMENT_SPEED):
+    def move_start2preinsertion(self, needle_goal_pose, MOVEMENT_SPEED):
         self.path_planner.calculate_target_path()
         pass
 

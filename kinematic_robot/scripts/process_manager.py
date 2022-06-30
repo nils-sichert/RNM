@@ -32,13 +32,13 @@ class ProcessManager:
         self.s0_reset               = True
         self.s1_cv_ready            = False
         self.s2_target_acquired     = False	
-        self.s3_pre_incision_reached= False
+        self.s3_pre_insertion_reached= False
         self.s4_reverse_active      = False
 
         self.user_execution_command = False
         self.goal_pose_js_filename  = None
 
-        self.act_goal_id            = None
+        self.crr_goal_id            = None
         self.old_goal_id            = None
 
         # ROS inits
@@ -74,7 +74,7 @@ class ProcessManager:
         self.act_goal_id            = msg.name
         rospy.logwarn("Got Goal_Pose_JS with ID:" + self.act_goal_id)
 
-    def callback_needle_goal_pose(self):
+    def callback_needle_goal_pose(self, msg):
         """
         Callback function for the target pose of the needle containing a location (x,y,z) and a roatation matrice (R); position[0:9] = Rotation & position [9:12] = position
         """
@@ -121,51 +121,51 @@ class ProcessManager:
             if self.s1_cv_ready and self.user_execution_command:
                 self.s0_reset = False
                 
-                if not self.old_goal_id == self.act_goal_id:
-                    self.old_goal_id = self.act_goal_id
-                    self.set_goal_pose_reached_pub = False
-                    self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED) #FIXME Add function
-                    self.set_goal_pose_reached_pub = True
+                if not self.old_goal_id == self.crr_goal_id:
+                    self.old_goal_id = self.crr_goal_id
+                    self.set_goal_pose_reached_pub(value=False)                                     # TODO Change reached flag to ID of goal pose
+                    self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)    #FIXME Add function
+                    self.set_goal_pose_reached_pub(value=True)
 
 
                 # Do until target acquired
                 if self.s2_target_acquired:                 # Is True if VS has published needle goal pose. Will be published True by cv
-                    self.motion_manager.move2goal_js(self.get_init_pose, self.MOVEMENT_SPEED)
+                    self.motion_manager.move2goal_js(self.init_pose, self.MOVEMENT_SPEED)
                                                             # TODO In case of aborting program due to Safety barrier, write all values into file
                     self.s1_cv_ready = False
                     self.reset_user_execution_command()
                     rospy.logwarn("[PM] Has successful completed CV.")
                 
 
-            # State 2: Move to pre-incision point--------------------------------------------------
+            # State 2: Move to pre-insertion point--------------------------------------------------
             if self.s2_target_acquired and self.user_execution_command:
-                self.s3_pre_incision_reached = self.motion_manager.move_start2preincision(self.needle_goal_pose, self.MOVEMENT_SPEED)  # FIXME Add function, 
+                self.s3_pre_insertion_reached = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED)  # FIXME Add function, 
                                                                                                 # calculate two list with help of needle goal:   
                                                                                                 # 1. Start -> Pre-Inj: calculated_trajectory_start2preinc.csv
                                                                                                 # 2. Pre-Inj -> Target: calculated_trajectory_preinj2target.csv
                                                                                                 # execute motion executor: calculated_trajectory_start2preinc.csv
                                                                                                 # return True
-
+                
                 # If finished
-                if self.s3_pre_incision_reached:
+                if self.s3_pre_insertion_reached:
                     self.s2_target_acquired = False
                     self.reset_user_execution_command()
-                    rospy.logwarn("[PM] Has successful completed Movement to Pre-Incision Point.")
+                    rospy.logwarn("[PM] Has successful completed Movement to Pre-insertion Point.")
 
 
-            # State 3: Execute incision------------------------------------------------------------
-            if self.s3_pre_incision_reached and self.user_execution_command:
-                self.s4_reverse_active = self.motion_manager.move_preincision2target()                      # FIXME Add function
+            # State 3: Execute insertion------------------------------------------------------------
+            if self.s3_pre_insertion_reached and self.user_execution_command:
+                self.s4_reverse_active = self.motion_manager.move_preinsertion2target()                      # FIXME Add function
                                                                                                 # execute motion executor: calculated_trajectory_preinc2target.csv
                                                                                                 # return True
                 # If finished
                 if self.s4_reverse_active:
-                    self.s3_pre_incision_reached = False
+                    self.s3_pre_insertion_reached = False
                     self.reset_user_execution_command()
-                    rospy.logwarn("[PM] Has successful completed Incision.")
+                    rospy.logwarn("[PM] Has successful completed insertion.")
 
 
-            # State 4: Reverse incision------------------------------------------------------------
+            # State 4: Reverse insertion------------------------------------------------------------
             if self.s4_reverse_active and self.user_execution_command:
                 self.motion_manager.move_target2start
                 self.reset_user_execution_command()
@@ -181,12 +181,12 @@ class ProcessManager:
             # If old goal pose != new goal pose && !needle_goal_published
             #   then goal_pose_reached = false
 
-            # Received new goal pose for incision
+            # Received new goal pose for insertion
             #   Move to init_pose (for collision avoidance)
             #   Wait for user input (to change needle)
-            #   Move to to pre-incision point
+            #   Move to to pre-insertion point
             #   Wait
-            #   Execute incision
+            #   Execute insertion
 
 
 
