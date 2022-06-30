@@ -2,6 +2,7 @@
 import rospy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool
+from std_msgs.msg import Float64MultiArray
 from motion_manager import MotionManager
 
 import sys
@@ -54,9 +55,9 @@ class ProcessManager:
         self.goal_pose_reached_pub = rospy.Publisher("~goal_pose_reached", Bool, queue_size=1)
 
         # Ros Subscriber
-        self.target_acquired_sub = rospy.Subscriber('~/target_acquired', Bool, self.callback_target_acquired)
-        self.needle_goal_pose_sub = rospy.Subscriber('~/needle_goal_pose', JointState, self.callback_needle_goal_pose)
-        self.goal_pose_sub = rospy.Subscriber('~/goal_pose_cs', JointState, self.callback_goal_pose_js )
+        self.target_acquired_sub = rospy.Subscriber('~/target_acquired', Bool, self.callback_target_acquired)   # TODO: Maybe redundant with needle goal pose?
+        self.needle_goal_pose_sub = rospy.Subscriber('~/needle_goal_pose', Float64MultiArray, self.callback_needle_goal_pose)
+        self.goal_pose_sub = rospy.Subscriber('~/goal_pose_cs', Float64MultiArray, self.callback_goal_pose_js )
 
     # Callbacks
     def callback_target_acquired(self, msg):
