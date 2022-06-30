@@ -103,7 +103,7 @@ def main(argv):
     #operation_mode      = rospy.get_param("/operation_mode")
     topic_joint_states  = "Joint_state" #rospy.get_param("/topic_joint_states")
     topic_goal_pose     = None # "/goal_pose"
-    command_topic = rospy.get_param("~command_topic", "/joint_position_example_controller_sim/joint_command")
+    command_topic   = rospy.get_param("~command_topic", "/joint_position_example_controller_sim/joint_command")
     has_a_path_flag = rospy.get_param("~new_plan_flag", False)
     #rospy.logwarn("Operation Mode " + str(operation_mode))
     motion_manager      = MotionManager(command_topic, topic_joint_states, topic_goal_pose, has_a_path_flag)
@@ -115,22 +115,22 @@ def main(argv):
         if motion_manager.has_active_goal_pose():
             if motion_manager.has_a_plan:
                 motion_manager.plan_motion()
-                rospy.logwarn("Has a planed motion.")
+                rospy.logwarn("Has a planned motion.")
                 motion_manager.motion_execution()
                 # /TODO Detect divergence from planned joints to actual joints
             else:
                 # /TODO add last path to goal
                 motion_manager.plan_motion()
-                rospy.logwarn("Planed motion.")
+                rospy.logwarn("Planned motion.")
                 motion_manager.motion_execution()
         else:
             if motion_manager.has_a_plan:
-                rospy.logwarn("Has a planed motion.")
+                rospy.logwarn("Has a planned motion.")
                 motion_manager.motion_execution()
                 # /TODO Detect divergence from planned joints to actual joints
             else:
                 motion_manager.plan_motion()
-                rospy.logwarn("Planed motion.")
+                rospy.logwarn("Planned motion.")
                 motion_manager.motion_execution()
         rate.sleep()
 
