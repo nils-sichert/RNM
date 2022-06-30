@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 import rospy
 from sensor_msgs.msg import JointState
-from std_msgs.msg import String
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Bool
+from motion_manager import MotionManager
 
 import sys
 
@@ -38,35 +38,72 @@ class ProcessManager:
         self.user_execution_command = False
         self.goal_pose_js_filename  = None
 
+        self.act_goal_id            = None
+        self.old_goal_id            = None
 
         # ROS inits
         rospy.init_node('process_manager', anonymous=True)
-        rospy.Subscriber('~/target_acquired', String, callback_target_acquired)
-        rospy.Subscriber('~/goal_pose_js_file', String, callback_goal_pose_js_file)
+
+        # instances
+        self.mm = MotionManager()
+
+        # Load Ros Parameter
+
+        # Ros Publisher
+        self.goal_pose_reached_pub = rospy.Publisher("~goal_pose_reached", Bool, queue_size=1)
 
 
-    def callback_target_acquired(self):
+        # Ros Subscriber
+        self.target_acquired_sub = rospy.Subscriber('~/target_acquired', Bool, self.callback_target_acquired)
+        self.needle_goal_pose_sub = rospy.Subscriber('~/needle_goal_pose', JointState, self.callback_needle_goal_pose)
+        self.goal_pose_sub = rospy.Subscriber('~/goal_pose_cs', JointState, self.callback_goal_pose_js )
+
+    # Callbacks
+    def callback_target_acquired(self, msg):
         '''
+        Callback function for needle target point: True = needle Target point is published and activ | False = needle Target point is not published or not activ
         '''
-        self.s2_target_acquired = True
+        self.s2_target_acquired = msg
 
-    def callback_goal_pose_js_file(self, msg_in : String):
-        ''' Callback function for the goal_pose_js topic. Stores current goal pose in object variable 
+    def callback_goal_pose_js(self, msg):
+        ''' 
+        Callback function for the goal_pose_js topic. Stores current goal pose in object variable 
         '''
         self.s1_cv_ready            = True
-        self.goal_pose_js_filename  = msg_in
+        self.goal_pose_js           = msg.position
+        self.act_goal_id            = msg.name
+        rospy.logwarn("Got Goal_Pose_JS with ID:" + self.act_goal_id)
 
+    def callback_needle_goal_pose(self):
+        """
+        Callback function for the target pose of the needle containing a location (x,y,z) and a roatation matrice (R); position[0:9] = Rotation & position [9:12] = position
+        """
+        self.needle_goal_pose = msg.position
+    
+    # Publish Methods
+    def set_goal_pose_reached_pub(self, value):
+        """
+        Value must be True = position reached | False = position not reached
+        """
+        msg = value
+        self.goal_pose_reached_pub(msg)
 
+    # Getter Methods
     def get_user_execution_command(self):
         ''' 
         '''
-        self.user_execution_command = rospy.get_param('~user_execution_command')
+        self.user_execution_command = rospy.get_param('~user_execution_command', False)
+    
+    def get_init_pose(self):
+        ''' 
+        '''
+        self.init_pose = rospy.get_param('~init_pose')
 
+    # Resetter Methods
     def reset_user_execution_command(self):
         '''
         '''
         rospy.set_param('~user_execution_command', False)
-
 
 
     def main_process(self):
@@ -83,38 +120,56 @@ class ProcessManager:
             # State 1: Camera Calibration and Target Acquisition-----------------------------------
             if self.s1_cv_ready and self.user_execution_command:
                 self.s0_reset = False
-
                 
+                if not self.old_goal_id == self.act_goal_id:
+                    self.old_goal_id = self.act_goal_id
+                    self.set_goal_pose_reached_pub = False
+                    self.mm.go_to_goal_js(self.goal_pose_js) #FIXME Add function
+                    self.set_goal_pose_reached_pub = True
 
 
                 # Do until target acquired
-                if self.s2_target_acquired: 
+                if self.s2_target_acquired:                 # Is True if VS has published needle goal pose. Will be published True by cv
+                    self.mm.move2start(self.get_init_pose)
+                                                            # TODO In case of aborting programm due to Safety barrier, write all values into file
                     self.s1_cv_ready = False
                     self.reset_user_execution_command()
+                    rospy.logwarn("[PM] Has successful completed CV.")
                 
 
             # State 2: Move to pre-incision point--------------------------------------------------
             if self.s2_target_acquired and self.user_execution_command:
-                
+                self.s3_pre_incision_reached = self.mm.move_start2preincision(self.needle_goal_pose)  # FIXME Add function, 
+                                                                                                # calculate two list with help of needle goal:   
+                                                                                                # 1. Start -> Pre-Inj: calculated_trajectory_start2preinc.csv
+                                                                                                # 2. Pre-Inj -> Target: calculated_trajectory_preinj2target.csv
+                                                                                                # execute motion executor: calculated_trajectory_start2preinc.csv
+                                                                                                # return True
+
                 # If finished
                 if self.s3_pre_incision_reached:
                     self.s2_target_acquired = False
                     self.reset_user_execution_command()
+                    rospy.logwarn("[PM] Has successful completed Movement to Pre-Incision Point.")
 
 
             # State 3: Execute incision------------------------------------------------------------
             if self.s3_pre_incision_reached and self.user_execution_command:
-
+                self.s4_reverse_active = self.mm.move_preincision2target()                      # FIXME Add function
+                                                                                                # execute motion executor: calculated_trajectory_preinc2target.csv
+                                                                                                # return True
                 # If finished
                 if self.s4_reverse_active:
                     self.s3_pre_incision_reached = False
                     self.reset_user_execution_command()
+                    rospy.logwarn("[PM] Has successful completed Incision.")
 
 
             # State 4: Reverse incision------------------------------------------------------------
             if self.s4_reverse_active and self.user_execution_command:
+                self.mm.move_target2start
                 self.reset_user_execution_command()
-
+                rospy.logwarn("[PM] Has successful reversed Robot to inital pose.")
 
 
             # Call method to check for user input to get execute_next_state
