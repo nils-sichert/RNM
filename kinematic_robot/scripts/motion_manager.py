@@ -15,10 +15,10 @@ from trajectory_planner_simple import trajectory_planner_simple
 from motion_executor import MotionExecutor
 
 class MotionManager:
-    def __init__(self, command_topic, topic_joint_states, topic_goal_pose, err_tol=1e-3, debug=False):
+    def __init__(self, command_topic, err_tol=1e-3, debug=False):
 
         # ROS communication
-
+        rospy.init_node("motion_manager")
         # Subscriber
         if "sim" in command_topic:
             self.current_joint_state_sub    = rospy.Subscriber('/joint_states', JointState, self.callback_joint_states, queue_size=1)
@@ -33,11 +33,15 @@ class MotionManager:
 
         # File-Names
          ## Path
-        self.filename_path_preinsertion    = "calculated_path_preinsertion.csv"
-        self.filename_path_insertion    = "calculated_path_insertion.csv"
+        self.filename_path_preinsertion_cartesian    = "Path/calculated_path_preinsertion_cartesian.csv"
+        self.filename_path_insertion_cartesian       = "Path/calculated_path_insertion_cartesian.csv"
+        self.filename_path_preinsertion_joint_space  = "Path/calculated_path_preinsertion_jointspace.csv"
+        self.filename_path_insertion_joint_space     = "Path/calculated_path_insertion_jointspace.csv"
          ## Trajectory
-        self.filename_trajectory_preinsertion    = "created_trajectory_to_goal_1ms.csv"
-        self.filename_trajectory_insertion       = "created_trajectory_to_target_1ms.csv"
+        self.filename_trajectory_preinsertion    = "Trajectory/created_trajectory_to_goal_1ms.csv"
+        self.filename_trajectory_insertion       = "Trajectory/created_trajectory_to_insertion_1ms.csv"
+
+
 
         # Constants and parameters
         """FIXME Pose2Angle error, can not create path when having different rotation in endefector
@@ -48,10 +52,10 @@ class MotionManager:
         #self.pos_target         = [0.31982467,  0.05923062,  0.23909587]
         
         # TODO clean up
-        self.current_theta      = self.curr_joint_states.position
+        self.current_theta      = self.current_joint_state
         self.current_A          = self.kinematics.get_pose_from_angles(self.current_theta)
-        self.current_rot        = self.current_A[:9]
-        self.curr_goal_pose     = [self.current_rot[0], self.current_rot[1], self.current_rot[2], self.current_rot[3], self.current_rot[4], self.current_rot[5], self.current_rot[6], self.current_rot[7], self.current_rot[8], self.pos_target[0], self.pos_target[1], self.pos_target[2]]
+        #self.current_rot        = self.current_A[:9]
+        #self.curr_goal_pose     = [self.current_rot[0], self.current_rot[1], self.current_rot[2], self.current_rot[3], self.current_rot[4], self.current_rot[5], self.current_rot[6], self.current_rot[7], self.current_rot[8], self.pos_target[0], self.pos_target[1], self.pos_target[2]]
         self.err_tolerance      = err_tol
 
         # Load Parameter
@@ -64,6 +68,7 @@ class MotionManager:
     def callback_joint_states(self, msg_in):
         ''' Callback function for the topic_joint_states. Stores current angles in object variable'''
         self.current_joint_state = msg_in.position
+        return 
 
   
     def move2goal_js(self, GoalPose, MOVEMENT_SPEED):
@@ -73,107 +78,40 @@ class MotionManager:
         1. interpolate actual to goal joint angles and sample to 1ms steps
         2. Load trajectory and execute motion
         """
-        self.trajectory_planner.create_trajectory(self.current_joint_state, GoalPose, MOVEMENT_SPEED, self.filename_trajectory_preinsertion) #FIXME input order
+        
+        self.trajectory_planner.create_point_to_point_traj(self.current_joint_state, GoalPose, MOVEMENT_SPEED, self.filename_path_preinsertion_joint_space, self.filename_trajectory_preinsertion) 
         self.motion_executor.run(self.filename_trajectory_preinsertion)
         return
 
-    def move_start2preinsertion(self, needle_goal_pose, MOVEMENT_SPEED):
+    def move_start2preinsertion(self, needle_goal_pose, MOVEMENT_SPEED): #FIXME rename into curent2preinsection
         self.path_planner.calculate_target_path(self.current_joint_state, needle_goal_pose, self.get_max_dist_between_waypoints(), self.filename_path_preinsertion_cartesian, self.filename_path_insertion_cartesian, self.filename_path_preinsertion_joint_space, self.filename_path_insertion_joint_space)
-        self.trajectory_planner.create_simple_trajectory(self.filename_path_preinsertion, self.filename_trajectory_preinsertion, MOVEMENT_SPEED)
+        self.trajectory_planner.create_simple_trajectory(self.filename_path_preinsertion_joint_space, self.filename_trajectory_preinsertion, MOVEMENT_SPEED)
         self.motion_executor.run(self.filename_trajectory_preinsertion)
         return True
 
     def move_preinsertion2target(self, MOVEMENT_SPEED):
-        self.trajectory_planner.create_simple_trajectory(self.filename_path_insertion, self.filename_trajectory_insertion, MOVEMENT_SPEED)
+        self.trajectory_planner.create_simple_trajectory(self.filename_path_insertion_joint_space, self.filename_trajectory_insertion, MOVEMENT_SPEED)
         self.motion_executor.run(self.filename_trajectory_insertion)
         return True
 
-    def plan_motion(self):
-        # initialize list planing
-        # TODO write listplanner
-        self.path_planner.calculate_target_path(self.curr_goal_pose)
-        self.path_planner.calculate_path_list_jointspace()
-        #self.trajectory_planner.create_path()
-        return
-    
     def get_max_dist_between_waypoints(self):
         # maximum distance between each waypoint (|x/y/z|), no rotation is taken into account
         max_dist_between_supports = rospy.get_param("~max_dist_between_supports", 0.01)
         return max_dist_between_supports
 
-def main(argv):
-
-    # Init
-    rospy.init_node("motion_manager")
-    #operation_mode      = rospy.get_param("/operation_mode")
-    topic_joint_states  = "Joint_state" #rospy.get_param("/topic_joint_states")
-    topic_goal_pose     = None # "/goal_pose"
-    command_topic   = rospy.get_param("~command_topic", "/joint_position_example_controller_sim/joint_command")
-    has_a_path_flag = rospy.get_param("~new_plan_flag", False)
-    #rospy.logwarn("Operation Mode " + str(operation_mode))
-    motion_manager      = MotionManager(command_topic, topic_joint_states, topic_goal_pose, has_a_path_flag)
-
-    # Pre-run
-    #   launch launchfile with:
-    #       publishers: joint_states
-    #       parameter set up für topic names
-    #       init_pose (joint space)
-    # 
-    # Setup MM
-    #   get topic names -> als rosparam aus launchfile
-    #   get init_post (parameter)
-    #   publisher init
-    #       goal_pose_reached (True=reached/False=notreached)
-    #   subscriber init
-    #       joint_state (js list) für aktuelle pose
-    #       goal_pose_js (js list) für aktuelle goal pose im joint space
-    #       goal_pose_cs (A matrix) für aktuelle goal pose im cartesian space
-    #   param
-    #       needle_goal_published (bool) from CV when target found
-
-    # Loop
-    rate = rospy.Rate(1000)
-    while not rospy.is_shutdown():
-        # Received new goal pose for CV
-        # If old goal pose != new goal pose && !needle_goal_published
-        #   then goal_pose_reached = false
-
-        # Received new goal pose for incision
-        #   Move to init_pose (for collision avoidance)
-        #   Wait for user input (to change needle)
-        #   Move to to pre-incision point
-        #   Wait
-        #   Execute incision
-
-
-    # Loop
-
-    rate = rospy.Rate(1000)
-    while not rospy.is_shutdown():
-        if motion_manager.has_active_goal_pose():
-            if motion_manager.has_a_plan:
-                motion_manager.plan_motion()
-                rospy.logwarn("Has a planned motion.")
-                motion_manager.motion_execution()
-                # /TODO Detect divergence from planned joints to actual joints
-            else:
-                # /TODO add last path to goal
-                motion_manager.plan_motion()
-                rospy.logwarn("Planned motion.")
-                motion_manager.motion_execution()
-        else:
-            if motion_manager.has_a_plan:
-                rospy.logwarn("Has a planned motion.")
-                motion_manager.motion_execution()
-                # /TODO Detect divergence from planned joints to actual joints
-            else:
-                motion_manager.plan_motion()
-                rospy.logwarn("Planned motion.")
-                motion_manager.motion_execution()
-        rate.sleep()
 
 if __name__ == '__main__':
     
-    main(sys.argv)
+    #operation_mode      = rospy.get_param("/operation_mode")
+    command_topic   = rospy.get_param("~command_topic", "/joint_position_example_controller_sim/joint_command")
 
+    motion_manager = MotionManager(command_topic)
+    MOVEMENT_SPEED = 0.01/1000
+    GoalPose = [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06]
+    needle_goal_pose = [7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01,  0.30874679,  0.24655161, 0.45860086]
+    motion_manager.move2goal_js(GoalPose, MOVEMENT_SPEED)
 
+    motion_manager.move_start2preinsertion(needle_goal_pose, MOVEMENT_SPEED)
+        
+    motion_manager.move_preinsertion2target(MOVEMENT_SPEED)
+        

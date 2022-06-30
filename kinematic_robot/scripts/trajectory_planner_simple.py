@@ -16,7 +16,7 @@ class trajectory_planner_simple:
         # Instances
         self.robot_kinematics = robot_kinematics()
 
-    def create_point_to_point_traj(self, start_pose, end_pose):
+    def create_point_to_point_traj(self, start_pose, end_pose, MOVEMENT_SPEED, file_input_waypoints, file_output_trajectory,):
         ''' Wraps create_simple_trajectory with auto waypoint file generation, such that a simple 
             point to point trajectory can easily be realised. A directory and file name of the 
             trajectory is returned for further processing (e.g. for motion execution).
@@ -27,23 +27,20 @@ class trajectory_planner_simple:
                 traj_dirname (String): directory and file string for generated trajectory
         '''
 
-        path_dirname    = 'Path/temp_point2point_path.csv'
-        traj_dirname    = 'trajectory/temp_point2point_traj.csv'
-
         # Delete content of existing file or create if not existing
-        with open(os.path.join(os.path.dirname(__file__), path_dirname),'w+') as file:
+        with open(os.path.join(os.path.dirname(__file__), file_input_waypoints),'w+') as file:
             file.truncate(0)
 
         # Write start and end pose into path file
-        with open((os.path.join(os.path.dirname(__file__), path_dirname)), mode="a", newline="") as f:    
+        with open((os.path.join(os.path.dirname(__file__), file_input_waypoints)), mode="a", newline="") as f:    
             writer = csv.writer(f, delimiter=",")
             writer.writerow(start_pose)
             writer.writerow(end_pose)
 
         # Create point 2 point trajectory
-        self.create_simple_trajectory(path_dirname, traj_dirname)
+        self.create_simple_trajectory(file_input_waypoints, file_output_trajectory, MOVEMENT_SPEED)
         
-        return traj_dirname 
+        return
 
     def create_simple_trajectory(self, file_input_waypoints, file_output_trajectory, MOVEMENT_SPEED, initial_waypoint=None):
         ''' Load file with waypoints in joint-space and write file with interpolated joint-angles 
@@ -90,11 +87,10 @@ class trajectory_planner_simple:
                 for j in range(steps + 1):
                     sample_joint = current_joints + j * delta_joints_per_step
                     writer.writerow(sample_joint)
-
+                writer.writerow(joint_list[-1])
             current_pose = next_pose
         
         rospy.logwarn(f'Generated simple trajectory in file {file_output_trajectory}')
-        print("Generated simple trajectory")
         return 
 
 # for test purposes
@@ -104,17 +100,20 @@ if __name__ == '__main__':
     #trajectory_calculate_simple.create_path()
 
     # New tests
-    traj_planner    = trajectory_planner_simple(movement_speed=0.020/1000)
+    traj_planner    = trajectory_planner_simple()
 
     # Test point 2 point trajectory generation
     p1  = [4.902633183867522e-06,-2.817378035757656e-06,3.7433388122565248e-06,-0.11962521536745907,-2.3976978260620285e-06,7.143186770974808e-07,6.714333409263418e-07]
     p2  = [0.24893705772069105,2.664877200306105,0.07457192893703553,1.9891384910981544,-0.023143228919031037,0.5593613260435555,0.16576735333757406]
-    traj_file   = traj_planner.create_point_to_point_traj(p1, p2)
+    #traj_file   = traj_planner.create_point_to_point_traj(p1, p2)
     
     # Test planned path trajectory generation
-    file_input_waypoints    = "Path/planned_path_jointspace.csv"
-    file_output_trajectory  = "trajectory/simple_trajectory.csv"
-    initial_waypoint        = [4.9026e-06,-2.8173e-06,3.7433e-06,-0.1196,-2.3976e-06,7.1431e-07,6.7143e-07]
+    file_input_waypoints    = "Path/calculated_path_preinsertion_jointspace.csv"
+    file_output_trajectory  = "Trajectory/created_trajectory_to_goal_1ms.csv"
 
-    traj_planner.create_simple_trajectory(file_input_waypoints, file_output_trajectory, initial_waypoint=initial_waypoint)
-        
+    file_input_waypoints2    = "Path/calculated_path_insertion_jointspace.csv"
+    file_output_trajectory2  = "Trajectory/created_trajectory_to_insertion_1ms.csv"
+    #initial_waypoint        = [4.9026e-06,-2.8173e-06,3.7433e-06,-0.1196,-2.3976e-06,7.1431e-07,6.7143e-07]
+
+    traj_planner.create_simple_trajectory(file_input_waypoints, file_output_trajectory, 0.01/1000)
+    traj_planner.create_simple_trajectory(file_input_waypoints2, file_output_trajectory2, 0.01/1000)

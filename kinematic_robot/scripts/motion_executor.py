@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from fileinput import filename
 import rospy
 import os
 from sensor_msgs.msg import JointState
@@ -24,13 +25,13 @@ class MotionExecutor:
         self.movement_speed = 0.01/1000
         self.robot_kinematics = robot_kinematics()
 
-    def run(self):
-        self.get_joint_list()
+    def run(self, filename):
+        self.get_joint_list(filename)
         self.move_to_start()
         self.publish_joint()
         
-    def get_joint_list(self):
-        with open((os.path.join(os.path.dirname(__file__),"trajectory/calculated_trajectory_simple_1ms.csv"))) as f:
+    def get_joint_list(self, filename):
+        with open((os.path.join(os.path.dirname(__file__),filename))) as f:
                         reader = csv.reader(f, delimiter=",")
                         for row in reader:
                             self.publish_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
@@ -92,12 +93,8 @@ class MotionExecutor:
             rate.sleep()
         
         rospy.logwarn("Published all Joints.")
-        rospy.logwarn("repeat last join:" + str(joint))
-        while not rospy.is_shutdown():
-            self.pub.publish(msg)
-            rate.sleep()
-
-
+        
+        
 # for testing purpose
 def main(argv):
     rospy.init_node("variable_publisher")

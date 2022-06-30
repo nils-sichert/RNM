@@ -1,6 +1,7 @@
 from sympy import sin, cos, Abs, symbols, init_printing, Matrix, eye, pi, lambdify, zeros
 from sympy.utilities.lambdify import lambdastr
 import numpy as np
+import rospy
 
 class DhCreator:
     def __init__(self):
@@ -64,6 +65,7 @@ class DhCreator:
         # Lambdify
         self.A_lamb  = lambdify([(c1, c2, c3, c4, c5, c6, c7), (s1, s2, s3, s4, s5, s6, s7)], A, 'numpy')
         self.J_lamb  = lambdify([(c1, c2, c3, c4, c5, c6, c7), (s1, s2, s3, s4, s5, s6, s7)], J, 'numpy')
+
 
         """
         self.A_lamb  = lambdify([(q1,q2,q3,q4,q5,q6,q7)], A, 'numpy')

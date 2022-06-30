@@ -18,28 +18,32 @@ class path_planner:
     def __init__(self):
         # Creat Object of robot kinematics, which contains direct/ inverse kinematic calculations
         self.robot_kinematics = robot_kinematics()
+        self.last_joint = []
        
     def calculate_target_path(self, current_joint_state, goal_pose, max_dist_between_waypoints, filename_path_preinsertion_cartesian, filename_path_insertion_cartesian, filename_path_preinsertion_joint_space, filename_path_insertion_joint_space):
         #TODO if/else! 
+        current_pose = self.robot_kinematics.get_pose_from_angles(current_joint_state)
         intersection_pose = self.calculate_intersection(goal_pose)
-        self.clean_path_list_cartesian(filename_path_preinsertion_cartesian, current_joint_state)
-        self.clean_path_list_cartesian(filename_path_insertion_cartesian, intersection_pose)
-        path_list_preinsertion = self.get_path_list_cartesian(filename_path_preinsertion_cartesian)       
+        
+        self.clean_path_list_cartesian(filename_path_preinsertion_cartesian, current_pose, intersection_pose)
+        path_list_preinsertion = self.get_path_list_cartesian(filename_path_preinsertion_cartesian) #FIXME Redundency !
+        self.calculate_path_list_jointspace(current_joint_state, goal_pose, max_dist_between_waypoints, path_list_preinsertion, filename_path_preinsertion_joint_space)
+
+        self.clean_path_list_cartesian(filename_path_insertion_cartesian, intersection_pose, goal_pose)
         path_list_insertion = self.get_path_list_cartesian(filename_path_insertion_cartesian)
+        self.calculate_path_list_jointspace(self.last_joint, goal_pose, max_dist_between_waypoints, path_list_insertion, filename_path_insertion_joint_space)
 
-        self.calculate_path_list_jointspace(current_joint_state, current_joint_pose, goal_pose, max_dist_between_waypoints, path_list_preinsertion, filename_path_preinsertion_joint_space)
-        self.calculate_path_list_jointspace(current_joint_state, current_joint_pose, goal_pose, max_dist_between_waypoints, path_list_insertion, filename_path_insertion_joint_space)
-
-    def clean_path_list_cartesian(self, filename, current_joint_state):
+    def clean_path_list_cartesian(self, filename, start_pose, goal_pose):
         # TODO add IF load path do NOT execute this method else if calculate new path execute this before loading path list cartesian
         with open(os.path.join(os.path.dirname(__file__),filename),'w+') as file:
             file.truncate(0)
 
         with open((os.path.join(os.path.dirname(__file__),filename)), mode="a", newline="") as f:
                 writer = csv.writer(f, delimiter=",")
-                writer.writerow(self.robot_kinematics.get_pose_from_angles(current_joint_state))
-    
-    def get_path_list_cartesian(self, filename):
+                writer.writerow(start_pose)
+                writer.writerow(goal_pose)
+
+    def get_path_list_cartesian(self, filename, ):
         """ 
         Load A matrices given in cartesian space from .csv file and safe it in "path_list"
         """
@@ -65,7 +69,7 @@ class path_planner:
 
         rospy.logwarn("Pathplaner Pos Offset" + str(pos_offset))
 
-        intersection_hight = 0                                      #FIXME local Parameter from rospy params
+        intersection_hight = 0.2                                      #FIXME local Parameter from rospy params
         a,b,c,d,e,f,g,h,i = goal_pose[0], goal_pose[1], goal_pose[2], goal_pose[3], goal_pose[4], goal_pose[5], goal_pose[6], goal_pose[7], goal_pose[8]
         n = float(intersection_hight/(g+h+i))
         pos_intersection = np.matmul(rot_mat,np.ones((3,1)))*n + pos_target - pos_offset
@@ -77,7 +81,7 @@ class path_planner:
         return A_intersection
     
 
-    def calculate_path_list_jointspace(self, current_joint_state, current_joint_pose, goal_pose, max_dist_between_waypoints, input_path, output_filename):
+    def calculate_path_list_jointspace(self, current_joint_state, goal_pose, max_dist_between_waypoints, input_path, output_filename):
         """
         method, that interpolates Joint Space into 1ms Step
         number of steps need to be calculated, e.g. calculating stepwidth with get_A and divide by max. movement per 1ms
@@ -113,6 +117,7 @@ class path_planner:
             goal_pose = tmp_A_list [i+1]
             current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,goal_pose)
         rospy.logwarn("Got path joint space.")
+        self.last_joint = current_theta
         return
 
     
@@ -124,8 +129,10 @@ class path_planner:
 if __name__ == '__main__':
     
     path_planner = path_planner()    
-    current_joint_state                     = [-1.16675,-1.07474, 1.15409,-1.7767, 0.37539, 1.057256, 0.808336]
-    goal_pose                               = [0.54942863, -0.78999408,  0.27209839, -0.77634363, -0.36227926,  0.51579483, -0.30889926, -0.4946343,  -0.81235347,  0.34874679,  0.04655161, 0.25860086]
+    
+    current_joint_state                     = [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06]
+    current_pose                            = [ 7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01  ,2.82213352e-01, -3.40555121e-06,  8.41024897e-01]
+    goal_pose                               = [7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01,  0.30874679,  0.24655161, 0.45860086]
     max_dist_between_waypoints              = 0.01
     filename_path_preinsertion_cartesian    = "Path/calculated_path_preinsertion_cartesian.csv"
     filename_path_insertion_cartesian       = "Path/calculated_path_insertion_cartesian.csv"

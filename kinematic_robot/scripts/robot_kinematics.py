@@ -4,6 +4,7 @@ import numpy as np
 from numpy import sin, cos
 import matplotlib.pyplot as plt
 from DH_creator import DhCreator
+import rospy
 
 class robot_kinematics:
     def __init__(self, debug=False):
@@ -17,6 +18,8 @@ class robot_kinematics:
         dh_creator = DhCreator()                
         self.A_lamb = dh_creator.get_A_lamb()   # load lambdafunction of A which is calculated with the help of a DH-Matrix
         self.J_lamb = dh_creator.get_J_lamb()   # load lambdafunction of J which is calculated with the help of the lambdafunction of A
+
+        rospy.logwarn("[DH] Loaded DH-Table.")
 
     def get_pose_from_angles(self, theta_target):
         ''' Get pose matrix A from joint angles. Utilizing pre-computed expressions using DH-parameters.
@@ -162,7 +165,7 @@ if __name__ == '__main__':
     
     kinematics  = robot_kinematics(debug=True)
 
-    theta_init  = np.array([-1.158190647974349, -0.8326139204752586, 1.5252210481375978, -2.6538870173015146, 0.3408476617932567, 2.0319040652910867, 0.22719384101198778])    # Theta used to init iterative search (in degree)
+    theta_init  = np.array([-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06])    # Theta used to init iterative search (in degree)
     theta_delta = np.array([-1.16675,-1.07474, 1.15409,-1.7767, 0.37539, 1.057256, 0.808336])    # Delta from init theta to target theta (in degree)
     theta_target = [np.deg2rad(theta_init[i] + theta_delta[i]) for i in range(7)]
 
