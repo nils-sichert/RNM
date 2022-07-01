@@ -6,23 +6,7 @@ from motion_manager import MotionManager
 import time
 import numpy as np
 
-    # Pre-run
-    #   launch launchfile with:
-    #       publishers: joint_states
-    #       parameter set up für topic names
-    #       init_pose (joint space)
-    # 
-    # Setup PM
-    #   get topic names -> als rosparam aus launchfile
-    #   get init_post (parameter)
-    #   publisher init
-    #       goal_pose_reached (True=reached/False=notreached)
-    #   subscriber init
-    #       joint_state (js list) für aktuelle pose
-    #       goal_pose_js (js list) für aktuelle goal pose im joint space
-    #       goal_pose_cs (A matrix) für aktuelle goal pose im cartesian space
-    #   param
-    #       needle_goal_published (bool) from CV when target found
+# TODO State 4 need to be implemented
 
 class ProcessManager:
 
