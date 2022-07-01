@@ -2,6 +2,7 @@
 import rospy
 from std_msgs.msg import Float64MultiArray
 from std_msgs.msg import Int16
+from std_msgs.msg import String
 from motion_manager import MotionManager
 import time
 import numpy as np
@@ -11,6 +12,9 @@ import numpy as np
 class ProcessManager:
 
     def __init__(self):
+
+        # Task commands
+        self.taskcmd_camera_calibration = "camera_calibration_start"
 
         # Flags
         self.s0_reset               = True
@@ -24,6 +28,8 @@ class ProcessManager:
 
         self.crr_goal_pose_id       = None
         self.old_goal_pose_id       = None
+
+        self.crr_task_command       = None
 
         # ROS inits
         rospy.init_node('process_manager', anonymous=True)
@@ -46,7 +52,8 @@ class ProcessManager:
         self.sub_goal_pose_js       = rospy.Subscriber('/goal_pose_js', Float64MultiArray, self.callback_goal_pose_js )
 
         # ROS Publisher (do last to signal node ready)
-        self.pub_goal_pose_reached_pub  = rospy.Publisher('/goal_pose_reached', Int16, queue_size=1)
+        self.pub_task_command       = rospy.Publisher('/task_command', String, queue_size=1)      
+        self.pub_goal_pose_reached  = rospy.Publisher('/goal_pose_reached', Int16, queue_size=1)
 
         time.sleep(1)
         rospy.logwarn('[PM] Init finished')
@@ -70,12 +77,21 @@ class ProcessManager:
         self.needle_goal_pose = msg.data
     
     # Publish Methods
-    def pub_goal_pose_reached(self, goal_pose_id : int):
+    def publish_goal_pose_reached(self, goal_pose_id : int):
         ''' Publishes the confirmation ID of a reached goal pose
         '''
         msg      = Int16()
         msg.data = goal_pose_id
-        self.pub_goal_pose_reached_pub.publish(msg)
+        self.pub_goal_pose_reached.publish(msg)
+
+    def publish_task_command(self, task_command : str):
+        ''' Publishes the current task command
+        '''
+        self.crr_task_command = task_command
+        msg = String()
+        msg.data = task_command
+        rospy.logwarn(f'[PM] Sending task_command: {task_command}')
+        self.pub_task_command.publish(msg)
 
     # Getter Methods
     def get_user_execution_command(self):
@@ -119,15 +135,16 @@ class ProcessManager:
                     self.reset_user_execution_command()
                     rospy.logwarn("[PM] s0 -> s1 Topics from CV detected")
                     rospy.logwarn("[PM] Waiting for user execution command...")
+                    self.publish_task_command(self.taskcmd_camera_calibration)
 
-            
+
             # State 1: Camera Calibration and Target Acquisition-----------------------------------
-            if self.s1_cv_ready and self.user_execution_command:
+            if self.s1_cv_ready and self.user_execution_command:            
                 
                 if not self.old_goal_pose_id == self.crr_goal_pose_id:
                     self.old_goal_pose_id = self.crr_goal_pose_id
                     self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)   
-                    self.pub_goal_pose_reached(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
+                    self.publish_goal_pose_reached(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
 
 
                 # Exit State - when target acquired
@@ -144,11 +161,11 @@ class ProcessManager:
             # State 2: Move to pre-insertion point--------------------------------------------------
             if self.s2_target_acquired and self.user_execution_command:
                 self.s3_at_pre_insertion = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
-                                                                                                # calculate two list with help of needle goal:   
-                                                                                                # 1. Start -> Pre-Inj: calculated_trajectory_start2preinc.csv
-                                                                                                # 2. Pre-Inj -> Target: calculated_trajectory_preinj2target.csv
-                                                                                                # execute motion executor: calculated_trajectory_start2preinc.csv
-                                                                                                # return True
+                # calculate two list with help of needle goal:   
+                # 1. Start -> Pre-Inj: calculated_trajectory_start2preinc.csv
+                # 2. Pre-Inj -> Target: calculated_trajectory_preinj2target.csv
+                # execute motion executor: calculated_trajectory_start2preinc.csv
+                # return True
                 
                 # Exit State
                 if self.s3_at_pre_insertion:
@@ -161,8 +178,9 @@ class ProcessManager:
             # State 3: Execute insertion------------------------------------------------------------
             if self.s3_at_pre_insertion and self.user_execution_command:
                 self.s4_reverse_active = self.motion_manager.move_preinsertion2target(self.MOVEMENT_SPEED)                     
-                                                                                                # execute motion executor: calculated_trajectory_preinc2target.csv
-                                                                                                # return True
+                # execute motion executor: calculated_trajectory_preinc2target.csv
+                # return True
+
                 # Exit State
                 if self.s4_reverse_active:
                     self.s3_at_pre_insertion = False
@@ -186,17 +204,6 @@ class ProcessManager:
             # Call method to check for user input to get execute_next_state
             self.get_user_execution_command()
             rate.sleep()
-
-            # Received new goal pose for CV
-            # If old goal pose != new goal pose && !needle_goal_published
-            #   then goal_pose_reached = false
-
-            # Received new goal pose for insertion
-            #   Move to init_pose (for collision avoidance)
-            #   Wait for user input (to change needle)
-            #   Move to to pre-insertion point
-            #   Wait
-            #   Execute insertion
 
 
 

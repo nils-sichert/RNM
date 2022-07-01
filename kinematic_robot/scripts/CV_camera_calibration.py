@@ -1,35 +1,41 @@
 #!/usr/bin/env python
-from importlib.resources import path
-from ssl import ALERT_DESCRIPTION_HANDSHAKE_FAILURE
-from sympy import true
-import rospy
-import sys
-import cv2 
-import cv2 as cv
-from sensor_msgs.msg import Image
-from sensor_msgs.msg import JointState
-from std_msgs.msg import Float64MultiArray, Int16
-from cv_bridge import CvBridge, CvBridgeError
-import numpy as np
-from numpy.linalg import inv
 import os
+import sys
 import time
+
+import cv2
+import cv2 as cv
+import numpy as np
+import rospy
+from cv_bridge import CvBridge, CvBridgeError
+from numpy.linalg import inv
+from sensor_msgs.msg import Image, JointState
+from std_msgs.msg import Float64MultiArray, Int16, String
+from sympy import true
+
 from robot_kinematics import robot_kinematics
 
 
 class CameraCalibration():
-    
+        
     def __init__(self):
+
+        rospy.logwarn('[CC] Init started...')
+
+        # Task command to start CC
+        self.task_start_flag    = False
+        self.task_start_command = "camera_calibration_start"
         # Set To False If Calibration Shouldn't Be Visible In Window Frame
         self.visualize_calibration_process = True
         # Path For Calibration Results
-        path = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/calibration_results" 
+        self.result_path        = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/calibration_results" 
         # Path To Read-In Desired Joint List
-        self.joint_list_dir = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/joint_list/camera_calibration/collected_joint_list.npy"
-        # Topic To Publish Next Goal Pose e.g joint list + position in list
-        self.goal_pose_topic = "/goal_pose_js"
-        # Topic To Subscribe To Check If Goal Pose Is Reached (Int16) e.g 0, 1, 2, 3,.....last joint list index
-        self.goal_pose_reached_topic = "/goal_pose_reached"
+        self.joint_list_dir     = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/joint_list/camera_calibration/collected_joint_list.npy"
+        # Joint State Topic
+        self.joint_state_topic  = rospy.get_param('/joint_state_topic', '/joint_states')
+        # Image topics
+        self.rgb_frame_topic    = rospy.get_param('/rgb_image_topic', "/k4a/rgb/image_raw")
+        self.ir_frame_topic     = rospy.get_param('/ir_image_topic', "/k4a/ir/image_raw")
 
         # World Frame Object Points: same chessboard for RGB and IR camera
         self.objpoints = [] # 3d point in real world space
@@ -69,24 +75,32 @@ class CameraCalibration():
         
    
         # Initialize ROS Specific Functions
-        self.node_name = "Camera_Handeye_Calibration"
+        self.node_name = "camera_calibration"
         rospy.init_node(self.node_name)
         rospy.on_shutdown(self.cleanup)
         self.bridge = CvBridge()
-        self.rgb_frame          = rospy.Subscriber("/k4a/rgb/image_raw", Image, self.rgb_image_callback)
-        self.ir_frame           = rospy.Subscriber("/k4a/ir/image_raw", Image, self.ir_image_callback)
-        self.joint_state        = rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
-        self.pub_goal_pose_js   = rospy.Publisher(self.goal_pose_topic, Float64MultiArray, queue_size=1)
-        self.sub_goal_pose_reached  = rospy.Subscriber(self.goal_pose_reached_topic, Int16, self.callback_goal_pose_reached)
-        rospy.loginfo("Waiting for image topics...")
-        cv.waitKey(1000)
-    
-        #Start Calibration Process
-        self.main_calibration()
 
-    def joint_state_callback(self, joint_state):
+        self.sub_rgb_frame          = rospy.Subscriber(self.rgb_frame_topic, Image, self.rgb_image_callback)
+        self.sub_ir_frame           = rospy.Subscriber(self.ir_frame_topic, Image, self.ir_image_callback)
+        self.sub_joint_state        = rospy.Subscriber(self.joint_state_topic, JointState, self.joint_state_callback)
+        self.sub_goal_pose_reached  = rospy.Subscriber("/goal_pose_reached", Int16, self.callback_goal_pose_reached)
+        self.sub_task_command       = rospy.Subscriber('/task_command', String, self.callback_task_command)
+
+        self.pub_goal_pose_js       = rospy.Publisher("/goal_pose_js", Float64MultiArray, queue_size=1)
+        rospy.loginfo("[CC] Waiting for image topics...")
+        time.sleep(1)
+
+
+    def callback_task_command(self, msg : String):
+        ''' /TODO Docstring'''
+        if msg.data == self.task_start_command:
+            self.task_start_flag = True
+        else:
+            self.task_start_flag = False
+
+
+    def joint_state_callback(self, joint_state : JointState):
         self.current_joint_state = joint_state.position
-
 
     # Store Current RGB Frame In Class Variable
     def rgb_image_callback(self, ros_rgb_img):
@@ -161,7 +175,7 @@ class CameraCalibration():
             self.R_gripper2base.append(R_gtb)
             self.t_gripper2base.append(t_gtb)
 
-            rospy.logwarn(f"[camera calibration] Collected data for frame with ID: {self.joint_list_pos}")
+            rospy.logwarn(f"[CC]Collected data for frame with ID: {self.joint_list_pos}")
          
 
     
@@ -179,17 +193,17 @@ class CameraCalibration():
         self.pub_goal_pose_js.publish(msg)
        
 
-        rospy.logwarn(f"[camera calibration] Send new goal_pose_js with ID {pose_id}")
+        rospy.logwarn(f"[CC] Send new goal_pose_js with ID {pose_id}")
 
     def callback_goal_pose_reached(self, msg : Int16):
         ''' Checks the received confirmation ID and sets at_desired_goal_pose flag accordingly
         '''
         received_id = msg.data
         if received_id == self.joint_list_pos:
-            rospy.logwarn(f"[camera calibration] Received correct confirmation ID {received_id}")
+            rospy.logwarn(f"[CC] Received correct confirmation ID {received_id}")
             self.at_desired_goal_pose = True
 
-    def rgb_ir_calibration(self, path):
+    def rgb_ir_calibration(self):
         """ This function calibrates the rgb and ir camera:
             Saves all important parameters as .npy and write new yaml file for camera driver
             It also calculates the extrinsic parameter between RGB and IR camera"""
@@ -206,22 +220,22 @@ class CameraCalibration():
 
         # Calibrate Stereo Camera: extrinsic parameters between RGB and IR camera
         retStereo, cameraMatrix_stereo_rgb, dist_stereo_rgb, cameraMatrix_stereo_ir, dist_stereo_ir, self.rvec_stereo, self.tvec_stereo, essentialMatrix, fundamentalMatrix = cv.stereoCalibrate(self.objpoints, self.imgpoints_rgb, self.imgpoints_ir, cameraMatrix_rgb, dist_rgb, cameraMatrix_ir, dist_ir, None, flags = (cv.CALIB_FIX_INTRINSIC + cv.CALIB_RATIONAL_MODEL))
-        rospy.logwarn("[camera calibration] Calibrated RGB, IR and Stereo Camera successfully")
+        rospy.logwarn("[CC] Calibrated RGB, IR and Stereo Camera successfully")
         print(cameraMatrix_rgb)
         print(dist_rgb)
         print(cameraMatrix_ir)
         print(dist_ir)
-        self.save_calibration_results(path)
+        self.save_calibration_results()
         
 
-    def save_calibration_results(self, path):
-        np.save(path + "/R_gripper2base.npy", self.R_gripper2base)
-        np.save(path + "/t_gripper2base.npy", self.t_gripper2base)
-        np.save(path + "/rmat_rgb.npy", self.rmat_rgb)
-        np.save(path + "/tvecs_rgb.npy", self.tvecs_rgb)
-        np.save(path + "/rvec_stereo.npy", self.rvec_stereo)
-        np.save(path + "/tvec_stereo.npy", self.tvec_stereo)
-        rospy.logwarn("[camera calibration] Saved calibration result in desired path")
+    def save_calibration_results(self):
+        np.save(self.result_path + "/R_gripper2base.npy", self.R_gripper2base)
+        np.save(self.result_path + "/t_gripper2base.npy", self.t_gripper2base)
+        np.save(self.result_path + "/rmat_rgb.npy", self.rmat_rgb)
+        np.save(self.result_path + "/tvecs_rgb.npy", self.tvecs_rgb)
+        np.save(self.result_path + "/rvec_stereo.npy", self.rvec_stereo)
+        np.save(self.result_path + "/tvec_stereo.npy", self.tvec_stereo)
+        rospy.logwarn(f"[CC] Saved calibration result in {self.result_path}")
 
 
     def is_topic_published(self, topic_name : str):
@@ -234,7 +248,7 @@ class CameraCalibration():
 
     def main_calibration(self):
 
-        rospy.logwarn('[camera calibration] Starting main calibration...')
+        rospy.logwarn('[CC] Starting main calibration...')
 
         # Load Joint List For Goal Positions
         joint_list = np.load(self.joint_list_dir)
@@ -242,9 +256,11 @@ class CameraCalibration():
         print(len(joint_list))
 
         # Wait until process_manager is ready
-        rospy.logwarn('[camera calibration] Waiting for PM...')
+        rospy.logwarn('[CC] Waiting for PM...')
         while not self.is_topic_published('/goal_pose_reached'): pass
-        rospy.logwarn('[camera calibration] Topics from PM detected')
+        rospy.logwarn('[CC] Topics from PM detected, waiting for task_start_command')
+        while not self.task_start_flag: pass
+        rospy.logwarn('[CC] Received task_start_command')
         time.sleep(2)
 
         # Publish First Goal Position by giving Joint List (7 Angles) and Joint List Position (Out of All)
@@ -264,18 +280,18 @@ class CameraCalibration():
                 if self.joint_list_pos < len(joint_list):
                     self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
          
-        self.rgb_ir_calibration(path)
-
-
+        self.rgb_ir_calibration()
 
 
     def cleanup(self):
         rospy.logwarn("[CC] Shutting down vision node.")
         cv2.destroyAllWindows()   
 
+
 def main(args):       
     try:
-        CameraCalibration()
+        camera_calibration = CameraCalibration()
+        camera_calibration.main_calibration()
         rospy.spin()
     except KeyboardInterrupt:
         rospy.logwarn("[CC] Shutting down vision node.")
