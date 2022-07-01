@@ -45,7 +45,7 @@ class path_planner:
             reader = csv.reader(f, delimiter=",")
             for row in reader:
                 path_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6]),float(row[7]),float(row[8]),float(row[9]),float(row[10]),float(row[11])])
-        rospy.logwarn("Got path cartesian space.")
+        rospy.logwarn("[PP] Got path cartesian space.")
 
         return path_list
 
@@ -59,14 +59,14 @@ class path_planner:
 
         pos_offset = np.matmul(rot_mat, offset_insection) 
 
-        rospy.logwarn("Pathplaner Pos Offset" + str(pos_offset))
+        rospy.logwarn("[PP] Pos Offset" + str(pos_offset))
 
         intersection_hight = 0.2                                      #FIXME local Parameter from rospy params
         a,b,c,d,e,f,g,h,i = goal_pose[0], goal_pose[1], goal_pose[2], goal_pose[3], goal_pose[4], goal_pose[5], goal_pose[6], goal_pose[7], goal_pose[8]
         n = float(intersection_hight/(g+h+i))
         pos_intersection = np.matmul(rot_mat,np.ones((3,1)))*n + pos_target - pos_offset
 
-        rospy.logwarn("Pathplaner Pos Intersection" + str(pos_intersection))
+        rospy.logwarn("[PP] Pos Intersection" + str(pos_intersection))
 
         A_intersection = [a,b,c,d,e,f,g,h,i,pos_intersection[0][0],pos_intersection[1][0], pos_intersection[2][0]]
         
@@ -107,7 +107,7 @@ class path_planner:
 
             goal_pose = tmp_A_list [i+1]
             current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,goal_pose)
-        rospy.logwarn("Got path joint space.")
+        rospy.logwarn("[PP] Got path joint space.")
         self.last_joint = current_theta
 
         # FIXME implement large Motion handler

@@ -8,7 +8,7 @@ from robot_kinematics import robot_kinematics
 # FIXME eine Zeile zu viel, dividieren durch 0 unterbinden, nan bei gleicher Position?
 
 class trajectory_planner_simple:
-    def __init__(self, robot_kinematics, max_joint_vel=2.1750/4):
+    def __init__(self, robot_kinematics, max_joint_vel=2.1750/4000):
         ''' Parameters:
                 movement_speed (float): Movement speed for end effector [m/s] TODO: is that correct?
         '''
@@ -39,7 +39,7 @@ class trajectory_planner_simple:
             writer.writerow(end_pose)
 
         # Create point 2 point trajectory
-        self.create_simple_trajectory(file_input_waypoints, file_output_trajectory, MOVEMENT_SPEED)
+        self.create_simple_trajectory_JS(file_input_waypoints, file_output_trajectory)
         
         return
 
@@ -92,7 +92,8 @@ class trajectory_planner_simple:
         rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
         return 
 
-    def create_simple_trajectory_JS(self, file_input_waypoints, file_output_trajectory, max_joint_vel=2.1750/4, initial_waypoint=None):
+    def create_simple_trajectory_JS(self, file_input_waypoints, file_output_trajectory, max_joint_vel=2.1750/40000, initial_waypoint=None):
+        # /FIXME max_joint_vel is too small, could be increased?
         ''' Load file with waypoints in joint-space and write file with interpolated joint-angles 
             sampled at 1kHz (Step size of 1ms). An initial waypoint can be set in case the current 
             robot pose is not the same as the first input waypoint. This is useful for hardcoded 
@@ -135,13 +136,14 @@ class trajectory_planner_simple:
             for joint_id in range(num_joints):
                 for step_id in range(num_steps):
                     traj_points[step_id, joint_id]  = curr_waypoint[joint_id] + delta[joint_id] / num_steps * step_id
+            
+            traj_points  = np.append(traj_points, [next_waypoint], axis=0)
 
             # calculate each joint state for given movement speed and 1000Hz publishing rate
             with open((os.path.join(os.path.dirname(__file__), file_output_trajectory)), mode="a", newline="") as f:    
                 writer = csv.writer(f, delimiter=",")
                 for traj_point in traj_points:
-                    writer.writerow(traj_point)
-                #writer.writerow(waypoints[-1])
+                    writer.writerow(traj_point)     # /FIXME: writing in file can be done more efficiently
         
         rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
         return 
