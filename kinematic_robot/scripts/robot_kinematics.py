@@ -31,11 +31,11 @@ class robot_kinematics:
                 A (Matrix): Pose matrix
                     Position is in A[9:12]
                     Rotation is in np.reshape(A[0:9], (3,3))
-        '''
+        
         cos_target  = [np.cos(q) for q in theta_target] # calculate cos(q_i) for each q1 - q7 of theta
         sin_target  = [np.sin(q) for q in theta_target] # calculate sin(q_i) for each q1 - q7 of theta
-         
-        A = np.array(self.A_lamb(cos_target, sin_target))  # calculate A
+        '''
+        A = np.array(self.A_lamb(theta_target))  # calculate A
         A = A[:,0]                                         # reshape A 
 
         return A
@@ -145,9 +145,11 @@ class robot_kinematics:
 
     def get_J(self,theta):
         # current_trigo: sin and cos of actual theta's
+        '''
         cos_target  = [np.cos(q) for q in theta]
         sin_target  = [np.sin(q) for q in theta]
-        J = np.array(self.J_lamb(cos_target, sin_target))
+        '''
+        J = np.array(self.J_lamb(theta))
         return J
 
 
@@ -165,15 +167,14 @@ if __name__ == '__main__':
     
     kinematics  = robot_kinematics(debug=True)
 
-    theta_init  = np.array([-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06])    # Theta used to init iterative search (in degree)
-    theta_delta = np.array([-1.16675,-1.07474, 1.15409,-1.7767, 0.37539, 1.057256, 0.808336])    # Delta from init theta to target theta (in degree)
-    theta_target = [np.deg2rad(theta_init[i] + theta_delta[i]) for i in range(7)]
-
+    theta_init  = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])    # Theta used to init iterative search (in degree)
+    theta_target = np.array([-1.5936105274902141, 0.5478572209508795, 2.85868600131448, -2.1916521760233776, -2.8638610953095265, 1.2092807170550028, 0.41151600447462666])    # Delta from init theta to target theta (in degree)
+   
     A_current   = kinematics.get_pose_from_angles(theta_init)
     A_target    = kinematics.get_pose_from_angles(theta_target)
     print(A_current)
    
-
+    
     q_ik, error = kinematics.get_angles_from_pose(theta_init, A_target)
     print(np.rad2deg(q_ik))
     print(f"Position error: {error}")

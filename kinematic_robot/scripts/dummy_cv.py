@@ -44,7 +44,7 @@ class DummyCV:
         self.go_to_next_pose = True
         rospy.logwarn("[dCV] User input received")
 
-    def callback_goal_pose_reached(self, msg : Float64MultiArray):
+    def callback_goal_pose_reached(self, msg : Int16):
         ''' Checks the received confirmation ID and sets at_desired_goal_pose flag accordingly
         '''
         received_id = msg.data
@@ -90,8 +90,8 @@ class DummyCV:
     def important_stuff(self):
         ''' This function simulates important stuff which takes time
         '''
-        #delay = np.random.randint(2, 5)
-        #time.sleep(delay)
+        delay = 1
+        time.sleep(delay)
         return
 
     def is_topic_published(self, topic_name : str):
@@ -138,7 +138,7 @@ class DummyCV:
 
     def calculate_needle_goal_pose(self):
         #FIXME actual needle goal pose calculation
-        needle_goal_pose  = np.array([7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01,  0.30874679,  0.24655161, 0.45860086] )
+        needle_goal_pose  = np.array([ 0.70105746, -0.63595987 , 0.32260423 ,-0.71068701 ,-0.66031765,  0.24270266,  0.05867211, -0.39941914, -0.91488903 , 0.29202788,  0.14586335,  0.62162211])
         
         return needle_goal_pose
 

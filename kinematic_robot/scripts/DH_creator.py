@@ -48,29 +48,9 @@ class DhCreator:
         Q = Matrix(joint_angles)
         J = A.jacobian(Q)  # computing the Jacobian symbolically
 
-        # not nessesary
-        # Replace cos/sin terms
-        c1, c2, c3, c4, c5, c6, c7 = symbols('c1, c2, c3, c4, c5, c6, c7')
-        s1, s2, s3, s4, s5, s6, s7 = symbols('s1, s2, s3, s4, s5, s6, s7')
-        joint_cos = [c1, c2, c3, c4, c5, c6, c7]
-        joint_sin = [s1, s2, s3, s4, s5, s6, s7]
-
-        for (q, c, s) in zip(joint_angles, joint_cos, joint_sin):
-            A = A.subs(cos(q), c)
-            A = A.subs(sin(q), s)
-            J = J.subs(cos(q), c)
-            J = J.subs(sin(q), s)
-        # not nessesary
-
-        # Lambdify
-        self.A_lamb  = lambdify([(c1, c2, c3, c4, c5, c6, c7), (s1, s2, s3, s4, s5, s6, s7)], A, 'numpy')
-        self.J_lamb  = lambdify([(c1, c2, c3, c4, c5, c6, c7), (s1, s2, s3, s4, s5, s6, s7)], J, 'numpy')
-
-
-        """
+        
         self.A_lamb  = lambdify([(q1,q2,q3,q4,q5,q6,q7)], A, 'numpy')
         self.J_lamb  = lambdify([(q1,q2,q3,q4,q5,q6,q7)], J, 'numpy')
-        """
 
     def get_A_lamb(self):
         return self.A_lamb

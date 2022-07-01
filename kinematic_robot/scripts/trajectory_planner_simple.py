@@ -7,10 +7,12 @@ from tqdm import tqdm
 # FIXME eine Zeile zu viel, dividieren durch 0 unterbinden, nan bei gleicher Position?
 
 class trajectory_planner_simple:
-    def __init__(self, robot_kinematics):
+    def __init__(self, robot_kinematics, max_joint_vel=2.1750/4):
         ''' Parameters:
                 movement_speed (float): Movement speed for end effector [m/s] TODO: is that correct?
         '''
+        self.max_joint_vel   = max_joint_vel    # [rad/s] actual max is 2.1750
+
         # Instances
         self.robot_kinematics = robot_kinematics
 
@@ -91,6 +93,62 @@ class trajectory_planner_simple:
         rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
         return 
 
+    def create_simple_trajectory_JS(self, file_input_waypoints, file_output_trajectory, MOVEMENT_SPEED, initial_waypoint=None):
+        ''' Load file with waypoints in joint-space and write file with interpolated joint-angles 
+            sampled at 1kHz (Step size of 1ms). An initial waypoint can be set in case the current 
+            robot pose is not the same as the first input waypoint. This is useful for hardcoded 
+            paths with variable starting point.
+            Paramters:
+                file_input_waypoints (String): Directory and file name to input waypoints in joint-space
+                file_output_trajectory (String): Directory and file name for output trajectory list in joint space
+                initial_waypoint (List): An initial waypoint in joint-space can preceed the first waypoint in the input file
+        '''
+        # TODO replace .append!
+        # Load planned path from .csv file
+        joint_list = []
+        with open((os.path.join(os.path.dirname(__file__), file_input_waypoints))) as f:
+                reader = csv.reader(f, delimiter=",")
+                for row in reader:
+                    joint_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
+    
+        # delete content of existing file
+        with open(os.path.join(os.path.dirname(__file__), file_output_trajectory),'w+') as file:
+            file.truncate(0)
+
+        # Prepend initial waypoint
+        if not initial_waypoint == None:
+            joint_list.insert(0, initial_waypoint) 
+
+        # inital pose from first joint
+        # FIXME evtl. Fehler mit Doppelerfassung
+        current_pose = self.robot_kinematics.get_pose_from_angles(joint_list[0])
+
+        # calculate number of interpolations between each given waypoint
+        for i in tqdm(range(len(joint_list) - 1), ncols=100):
+            current_joints  = np.array(joint_list[i])
+            next_joints     = np.array(joint_list[i + 1])
+
+            # TODO continue here
+
+            delta           = np.AxisError
+
+            next_pose       = self.robot_kinematics.get_pose_from_angles(next_joints)     # /FIXME confirm correction
+            dist            = np.linalg.norm(next_pose[9:12] -  current_pose[9:12])
+            steps           = int(dist / MOVEMENT_SPEED)
+            delta_joints_per_step = (next_joints - current_joints) / steps
+
+            # calculate each joint state for given movement speed and 1000Hz publishing rate
+            with open((os.path.join(os.path.dirname(__file__), file_output_trajectory)), mode="a", newline="") as f:    
+                writer = csv.writer(f, delimiter=",")
+                for j in range(steps + 1):
+                    sample_joint = current_joints + j * delta_joints_per_step
+                    writer.writerow(sample_joint)
+                writer.writerow(joint_list[-1])
+            current_pose = next_pose
+        
+        rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
+        return 
+
 # for test purposes
 if __name__ == '__main__':
     #trajectory_calculate_simple = trajectory_planner_simple()
@@ -113,5 +171,5 @@ if __name__ == '__main__':
     file_output_trajectory2  = "Trajectory/created_trajectory_to_insertion_1ms.csv"
     #initial_waypoint        = [4.9026e-06,-2.8173e-06,3.7433e-06,-0.1196,-2.3976e-06,7.1431e-07,6.7143e-07]
 
-    traj_planner.create_simple_trajectory(file_input_waypoints, file_output_trajectory, 0.01/1000)
+    traj_planner.create_simple_trajectory_JS(file_input_waypoints, file_output_trajectory, 0.01/1000)
     traj_planner.create_simple_trajectory(file_input_waypoints2, file_output_trajectory2, 0.01/1000)

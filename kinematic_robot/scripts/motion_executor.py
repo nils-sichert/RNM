@@ -5,6 +5,7 @@ from std_msgs.msg import Float64MultiArray
 import csv
 import sys
 import numpy as np
+import time
 
 class MotionExecutor:
     def __init__(self, command_topic, robot_kinematics):
@@ -15,6 +16,7 @@ class MotionExecutor:
         self.publish_list       = []
 
     def run(self, filename, current_pose, MOVEMENT_SPEED):
+        time.sleep(1) #FIXME time or rostime
         self.get_joint_list(filename)
         self.move_to_start(current_pose, MOVEMENT_SPEED)
         self.publish_joint()
