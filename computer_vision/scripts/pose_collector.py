@@ -11,8 +11,8 @@ import numpy as np
 from numpy.linalg import inv
 import os
 import time
-from pynput.mouse import Listener
-from pynput import mouse
+
+
 import os
 
 
@@ -40,8 +40,8 @@ class pose_collector():
         self.bridge = CvBridge()
 
         # Camera Setup
-        self.rgb_frame          = rospy.Subscriber("/k4a/rgb/image_raw", Image, self.rgb_image_callback)
-        self.ir_frame           = rospy.Subscriber("/k4a/ir/image_raw", Image, self.ir_image_callback)
+        self.rgb_frame          = rospy.Subscriber("/rgb/image_raw", Image, self.rgb_image_callback)
+        self.ir_frame           = rospy.Subscriber("/ir/image_raw", Image, self.ir_image_callback)
 
         
     # Store Current RGB Frame In Class Variable
@@ -83,6 +83,7 @@ class pose_collector():
 def main(args):       
     try:
         Pose_Collector = pose_collector()
+        rospy.logwarn("Starting pose collector")
                 
         while not rospy.is_shutdown():
             rospy.spin()
