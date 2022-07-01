@@ -101,8 +101,8 @@ class DummyCV:
         self.go_to_next_pose = True
 
         # Loop over all desired waypoints
-        for pose_id, pose in enumerate(self.pose_list):
-
+        for pose_id in range(2):
+            pose = self.pose_list[pose_id]
             # Send next desired goal pose
             self.at_desired_goal_pose   = False
             self.publish_desired_goal_pose(pose, pose_id)
