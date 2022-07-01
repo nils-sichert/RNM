@@ -4,6 +4,7 @@ import numpy as np
 import csv
 import os
 from tqdm import tqdm
+from robot_kinematics import robot_kinematics
 # FIXME eine Zeile zu viel, dividieren durch 0 unterbinden, nan bei gleicher Position?
 
 class trajectory_planner_simple:
@@ -52,7 +53,6 @@ class trajectory_planner_simple:
                 file_output_trajectory (String): Directory and file name for output trajectory list in joint space
                 initial_waypoint (List): An initial waypoint in joint-space can preceed the first waypoint in the input file
         '''
-        # TODO replace .append!
         # Load planned path from .csv file
         joint_list = []
         with open((os.path.join(os.path.dirname(__file__), file_input_waypoints))) as f:
@@ -69,26 +69,25 @@ class trajectory_planner_simple:
             joint_list.insert(0, initial_waypoint) 
 
         # inital pose from first joint
-        # FIXME evtl. Fehler mit Doppelerfassung
         current_pose = self.robot_kinematics.get_pose_from_angles(joint_list[0])
 
         # calculate number of interpolations between each given waypoint
         for i in tqdm(range(len(joint_list) - 1), ncols=100):
-            current_joints  = np.array(joint_list[i])
-            next_joints     = np.array(joint_list[i + 1])
-            next_pose       = self.robot_kinematics.get_pose_from_angles(next_joints)     # /FIXME confirm correction
-            dist            = np.linalg.norm(next_pose[9:12] -  current_pose[9:12])
-            steps           = int(dist / MOVEMENT_SPEED)
-            delta_joints_per_step = (next_joints - current_joints) / steps
+            current_joint  = np.array(joint_list[i])
+            next_joint     = np.array(joint_list[i + 1])
+
+            max_delta_joint = np.abs(next_joint-current_joint).max()
+            steps           = int(max_delta_joint / MOVEMENT_SPEED)
+            delta_joints_per_step = (next_joint - current_joint) / steps
 
             # calculate each joint state for given movement speed and 1000Hz publishing rate
             with open((os.path.join(os.path.dirname(__file__), file_output_trajectory)), mode="a", newline="") as f:    
                 writer = csv.writer(f, delimiter=",")
                 for j in range(steps + 1):
-                    sample_joint = current_joints + j * delta_joints_per_step
+                    sample_joint = current_joint + j * delta_joints_per_step
                     writer.writerow(sample_joint)
                 writer.writerow(joint_list[-1])
-            current_pose = next_pose
+           
         
         rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
         return 
@@ -103,7 +102,6 @@ class trajectory_planner_simple:
                 file_output_trajectory (String): Directory and file name for output trajectory list in joint space
                 initial_waypoint (List): An initial waypoint in joint-space can preceed the first waypoint in the input file
         '''
-        # TODO replace .append!
         # Load planned path from .csv file
         joint_list = []
         with open((os.path.join(os.path.dirname(__file__), file_input_waypoints))) as f:
@@ -119,32 +117,22 @@ class trajectory_planner_simple:
         if not initial_waypoint == None:
             joint_list.insert(0, initial_waypoint) 
 
-        # inital pose from first joint
-        # FIXME evtl. Fehler mit Doppelerfassung
-        current_pose = self.robot_kinematics.get_pose_from_angles(joint_list[0])
-
         # calculate number of interpolations between each given waypoint
         for i in tqdm(range(len(joint_list) - 1), ncols=100):
-            current_joints  = np.array(joint_list[i])
-            next_joints     = np.array(joint_list[i + 1])
+            current_joint  = np.array(joint_list[i])
+            next_joint     = np.array(joint_list[i + 1])
 
-            # TODO continue here
-
-            delta           = np.AxisError
-
-            next_pose       = self.robot_kinematics.get_pose_from_angles(next_joints)     # /FIXME confirm correction
-            dist            = np.linalg.norm(next_pose[9:12] -  current_pose[9:12])
-            steps           = int(dist / MOVEMENT_SPEED)
-            delta_joints_per_step = (next_joints - current_joints) / steps
+            max_delta_joint = np.abs(next_joint-current_joint).max()
+            steps           = int(max_delta_joint / MOVEMENT_SPEED)
+            delta_joints_per_step = (next_joint - current_joint) / steps
 
             # calculate each joint state for given movement speed and 1000Hz publishing rate
             with open((os.path.join(os.path.dirname(__file__), file_output_trajectory)), mode="a", newline="") as f:    
                 writer = csv.writer(f, delimiter=",")
                 for j in range(steps + 1):
-                    sample_joint = current_joints + j * delta_joints_per_step
+                    sample_joint = current_joint + j * delta_joints_per_step
                     writer.writerow(sample_joint)
                 writer.writerow(joint_list[-1])
-            current_pose = next_pose
         
         rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
         return 
@@ -156,7 +144,8 @@ if __name__ == '__main__':
     #trajectory_calculate_simple.create_path()
 
     # New tests
-    traj_planner    = trajectory_planner_simple()
+    robot_kinematic = robot_kinematics()
+    traj_planner    = trajectory_planner_simple(robot_kinematic)
 
     # Test point 2 point trajectory generation
     p1  = [4.902633183867522e-06,-2.817378035757656e-06,3.7433388122565248e-06,-0.11962521536745907,-2.3976978260620285e-06,7.143186770974808e-07,6.714333409263418e-07]
