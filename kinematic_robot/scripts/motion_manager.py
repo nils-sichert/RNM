@@ -15,24 +15,20 @@ from trajectory_planner_simple import trajectory_planner_simple
 from motion_executor import MotionExecutor
 
 class MotionManager:
-    def __init__(self, command_topic, err_tol=1e-3, debug=False):
+    def __init__(self, joint_command_topic, joint_state_topic, err_tol=1e-3, debug=False):
 
         # ROS communication
         #rospy.init_node("motion_manager")
         
         # Subscriber
-        if "sim" in command_topic:
-            joint_topic    = '/joint_states'
-        else:
-            joint_topic    = '/franka_state_controller/joint_states_desired'
-
         self.current_joint_state = [0,0,0,0,0,0,0]
-        self.current_joint_state_sub    = rospy.Subscriber(joint_topic, JointState, self.callback_joint_states)
+        self.current_joint_state_sub    = rospy.Subscriber(joint_state_topic, JointState, self.callback_joint_states)
+        
         # Objects
         self.kinematics         = robot_kinematics()
         self.path_planner       = path_planner(self.kinematics)
         self.trajectory_planner = trajectory_planner_simple(self.kinematics)
-        self.motion_executor    = MotionExecutor(command_topic, self.kinematics)
+        self.motion_executor    = MotionExecutor(joint_command_topic, self.kinematics)
 
         # File-Names
          ## Path
@@ -109,9 +105,9 @@ class MotionManager:
 if __name__ == '__main__':
     rospy.init_node("motion_manager")
     #operation_mode      = rospy.get_param("/operation_mode")
-    command_topic   = rospy.get_param("~command_topic", "/joint_position_example_controller_sim/joint_command")
+    joint_command_topic   = rospy.get_param("joint_command_topic", "/joint_position_example_controller_sim/joint_command")
 
-    motion_manager = MotionManager(command_topic)
+    motion_manager = MotionManager(joint_command_topic)
     MOVEMENT_SPEED = 0.005/1000
     GoalPose = [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06]
     needle_goal_pose = [7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01,  0.30874679,  0.24655161, 0.45860086]

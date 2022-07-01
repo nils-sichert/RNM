@@ -4,12 +4,13 @@
     Dont include this but let it launch from right pc
     -->
     
-    
-    <node name="motion_executor" pkg="kinematic_robot" type="motion_manager.py">
-        <param name="command_topic" value="/joint_position_example_controller/joint_command" />
-        <param name="new_plan_flag" value="False" />    
-    </node>
+    <param name="joint_command_topic" value="/joint_position_example_controller/joint_command" />
+    <param name="joint_state_topic" value="/franka_state_controller/joint_states_desired" />
+    <param name="max_dist_between_supports" value="0.01" />
 
+    <node name="process_manager" pkg="kinematic_robot" type="process_manager.py" />
+    <node name="dummy_cv" pkg="kinematic_robot" type="dummy_cv.py" />
+    
 </launch>
 
 

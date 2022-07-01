@@ -1,13 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import rospy
-from sensor_msgs.msg import JointState
-from std_msgs.msg import Bool
 from std_msgs.msg import Float64MultiArray
 from std_msgs.msg import Int16
 from motion_manager import MotionManager
 import time
-
-import sys
 
     # Pre-run
     #   launch launchfile with:
@@ -46,26 +42,29 @@ class ProcessManager:
 
         # ROS inits
         rospy.init_node('process_manager', anonymous=True)
+        rospy.logwarn('[PM] Init started...')
 
-       
         # Load ROS Parameter
-        self.MOVEMENT_SPEED = rospy.get_param("~/movement_speed", 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
-        self.init_pose = rospy.get_param('~init_pose', [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06])
-        # ROS Publisher
-        self.pub_goal_pose_reached_pub  = rospy.Publisher("/goal_pose_reached", Int16, queue_size=1)
+        self.joint_state_topic  = rospy.get_param('/joint_state_topic')
+        self.joint_command_topic= rospy.get_param('/joint_command_topic')
+        self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
+        self.INIT_POSE          = rospy.get_param('/init_pose', [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06])
+        
+        # Objects
+        self.motion_manager     = MotionManager(self.joint_command_topic, self.joint_state_topic)
+       
+        # Ros Helper/ Debuging
+        self.user_execution_command = rospy.set_param('/user_execution_command', False)
 
         # ROS Subscriber
         self.sub_needle_goal_pose   = rospy.Subscriber('/needle_goal_pose', Float64MultiArray, self.callback_needle_goal_pose)
         self.sub_goal_pose_js       = rospy.Subscriber('/goal_pose_js', Float64MultiArray, self.callback_goal_pose_js )
 
-        # Ros Helper/ Debuging
-        self.user_execution_command = rospy.set_param('/user_execution_command', False)
-
-        # Objects
-        self.motion_manager = MotionManager('/joint_position_example_controller_sim/joint_command')  # TODO: replace with get params
-
+        # ROS Publisher (do last to signal node ready)
+        self.pub_goal_pose_reached_pub  = rospy.Publisher('/goal_pose_reached', Int16, queue_size=1)
 
         time.sleep(1)
+        rospy.logwarn('[PM] Init finished')
 
     # Callbacks
     def callback_goal_pose_js(self, msg : Float64MultiArray):
@@ -149,7 +148,7 @@ class ProcessManager:
                 # Exit State - when target acquired
                 if self.s2_target_acquired:                 # Is True if VS has published needle goal pose
                     rospy.logwarn("[PM] Target acquired, moving to inital pose.")
-                    self.motion_manager.move2goal_js(self.init_pose, self.MOVEMENT_SPEED)
+                    self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
                     
                     self.s1_cv_ready = False
                     self.reset_user_execution_command()
