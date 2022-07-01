@@ -1,0 +1,272 @@
+#!/usr/bin/env python
+from importlib.resources import path
+from ssl import ALERT_DESCRIPTION_HANDSHAKE_FAILURE
+from sympy import true
+import rospy
+import sys
+import cv2 
+import cv2 as cv
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray, Int16
+from cv_bridge import CvBridge, CvBridgeError
+import numpy as np
+from numpy.linalg import inv
+import os
+import time
+from robot_kinematics import robot_kinematics
+
+
+class CameraCalibration():
+    
+    def __init__(self):
+        # Set To False If Calibration Shouldn't Be Visible In Window Frame
+        self.visualize_calibration_process = True
+        # Path For Calibration Results
+        path = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/calibration_results" 
+        # Path To Read-In Desired Joint List
+        self.joint_list_dir = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/joint_list/camera_calibration/collected_joint_list.npy"
+        # Topic To Publish Next Goal Pose e.g joint list + position in list
+        self.goal_pose_topic = "~/goal_pose_js"
+        # Topic To Subscribe To Check If Goal Pose Is Reached (Int16) e.g 0, 1, 2, 3,.....last joint list index
+        self.goal_pose_reached_topic = "~/goal_pose_reached"
+
+        # World Frame Object Points: same chessboard for RGB and IR camera
+        self.objpoints = [] # 3d point in real world space
+        
+        # RGB Camera Variables
+        self.imgpoints_rgb = [] # 2d points in image plane.
+        self.frameSize_rgb = (2048,1536) # Resolution width=2048, height=1536
+        self.rmat_rgb = []  # Rotation Matrix RGB Frame For Convertion Of Rodrigues To Matrix
+        self.current_rgb_frame = []  # Current RGB Frame From Callback Function
+        self.ret_rgb = []  # Ret Value From "findChessboardCorners"
+        self.corners_rgb = [] # Detected Corners From "findChessboardCorners"
+
+        # IR Camera Variables
+        self.imgpoints_ir = [] # 2d points in image plane.
+        self.frameSize_ir = (640,576) # Resolution width=640, height=576
+        self.current_ir_frame = []  # Current IR Frame From Callback Function
+        self.ret_ir = []  # Ret Value From "findChessboardCorners"
+        self.corners_ir = [] # Detected Corners From "findChessboardCorners"
+
+        # Robot Arm
+        self.kinematics = robot_kinematics()
+        self.R_gripper2base = [] # stores rotational matrix after get_pose_from_angles calculation
+        self.t_gripper2base = [] # stores translation vector from get_pose_from_angles calcuclation
+        self.current_joint_state = [] # stores current joint angle which can be access when frame is saved 
+        self.joint_list_pos = 0
+        self.at_desired_goal_pose = False
+
+        # Setup Checkerboard Parameters
+        self.criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)  # termination criteria
+        self.chessboard_size = (8,5)  # Create chessboard and generate object points
+        self.square_size = 40 # Checkerboard Field Size in Millimeter
+
+        # Create Object Points in 3D Meshgrid Space And Covert Them In Desired Array Shape Like (0,0,0), (0,0,40), (0,0,80....
+        self.objp = np.zeros((self.chessboard_size[0] * self.chessboard_size[1], 3), np.float32)
+        self.objp[:,:2] = np.mgrid[0:self.chessboard_size[0],0:self.chessboard_size[1]].T.reshape(-1,2)*self.square_size
+
+        
+   
+        # Initialize ROS Specific Functions
+        self.node_name = "Camera_Handeye_Calibration"
+        rospy.init_node(self.node_name)
+        rospy.on_shutdown(self.cleanup)
+        self.bridge = CvBridge()
+        self.rgb_frame          = rospy.Subscriber("/k4a/rgb/image_raw", Image, self.rgb_image_callback)
+        self.ir_frame           = rospy.Subscriber("/k4a/ir/image_raw", Image, self.ir_image_callback)
+        self.joint_state        = rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
+        self.pub_goal_pose_js   = rospy.Publisher(self.goal_pose_topic, Float64MultiArray, queue_size=1)
+        self.sub_goal_pose_reached  = rospy.Subscriber(self.goal_pose_reached_topic, Int16, self.callback_goal_pose_reached)
+        rospy.loginfo("Waiting for image topics...")
+        cv.waitKey(1000)
+    
+        #Start Calibration Process
+        self.main_calibration()
+
+    def joint_state_callback(self, joint_state):
+        self.current_joint_state = joint_state.position
+
+
+    # Store Current RGB Frame In Class Variable
+    def rgb_image_callback(self, ros_rgb_img):
+        try:
+            self.current_rgb_frame = self.bridge.imgmsg_to_cv2(ros_rgb_img, "bgr8")
+        except CvBridgeError:
+            print ("error bridging ROS Image-Message to OpenCV Image")
+    
+
+    # Store Current IR Frame In Class Variable
+    def ir_image_callback(self, ros_ir_img):
+        try:
+            self.current_ir_frame = self.bridge.imgmsg_to_cv2(ros_ir_img, "bgr8")   
+        except CvBridgeError:
+            print ("error bridging ROS Image-Message to OpenCV Image")
+
+
+    def draw_image_points(self, window_name, frame, corners, ret):
+        """ Function used in create_and_draw_image_points to draw detected chessboard corners in rgb and ir
+            image frame"""
+        # Draw And Display Corners In Frame
+        frame = cv.drawChessboardCorners(frame, self.chessboard_size, corners, ret)
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name, 600, 600) 
+        cv.imshow(window_name, frame)
+        cv.waitKey(250)
+
+
+    def create_and_draw_image_points(self, visualization_flag):
+        """ This function creates 2D image points based on OpenCV. Set visualization_flag = True to show
+            corner detection process of RGB and IR Camera frame. Image points will be always calculated"""
+        
+        # Convert Color Image TO BGR OpenCV Convention (Necessary!)
+        self.gray_rgb = cv.cvtColor(self.current_rgb_frame, cv.COLOR_BGR2GRAY)
+        self.gray_ir = cv.cvtColor(self.current_ir_frame, cv.COLOR_BGR2GRAY)
+
+        # Detect Chessboard Corners
+        self.ret_rgb, self.corners_rgb = cv.findChessboardCorners(self.gray_rgb, self.chessboard_size, None)
+        self.ret_ir, self.corners_ir = cv.findChessboardCorners(self.gray_ir, self.chessboard_size, None)
+
+        # Only Proceed When Visualization Is Disired
+        if visualization_flag == True:
+            self.draw_image_points("RGB_Frame", self.current_rgb_frame, self.corners_rgb, self.ret_rgb)
+            self.draw_image_points("IR_Frame", self.current_ir_frame, self.corners_ir, self.ret_ir)
+        
+
+
+
+
+    def collect_calibration_data(self):
+        """ Collects the data e.g image points, object, points, joint_angles etc. if robot is in desired goal
+            position"""
+       
+        if self.ret_rgb and self.ret_ir == True:
+          
+            # Append object points according to corners to global array
+            self.objpoints.append(self.objp)
+
+            # Refine found corners in subpixel space and then append them to imgpoints
+            self.corner_sub_pixel_rgb = cv.cornerSubPix(self.gray_rgb, self.corners_rgb, (11,11), (-1,-1), self.criteria)
+            self.imgpoints_rgb.append(self.corner_sub_pixel_rgb)
+            self.corner_sub_pixel_ir = cv.cornerSubPix(self.gray_ir, self.corners_ir, (11,11), (-1,-1), self.criteria)
+            self.imgpoints_ir.append(self.corner_sub_pixel_ir)
+            
+            # Get joint angles of this frame and calculate the pose to extract
+            # Rotational matrix and translation vector
+           
+            current_pose = self.kinematics.get_pose_from_angles(self.current_joint_state)
+            current_pose = np.reshape(current_pose, (4,3)).T
+            R_gtb = current_pose[0:3, 0:3]
+            t_gtb = current_pose[0:3, 3:4]
+            self.R_gripper2base.append(R_gtb)
+            self.t_gripper2base.append(t_gtb)
+
+            rospy.logwarn(f"[camera calibration] Collected data for frame with ID: {self.joint_list_pos}")
+         
+
+    
+    def publish_desired_goal_pose(self, pose_js : np.array, pose_id : int):
+        ''' Publihes current desired goal pose and current pose id using the goal_pose_js_pub.
+            Also sets the self.curr_pose_id to the id that is sent in the message.
+            Parameters:
+                pose_js (List): Current goal pose in joint space
+                pose_id (int): Current goal pose ID
+        '''
+        pose_js = np.append(pose_js, pose_id)
+        msg         = Float64MultiArray()
+        msg.data    = pose_js
+
+        self.pub_goal_pose_js.publish(msg)
+       
+
+        rospy.logwarn(f"[camera calibration] Send new goal_pose_js with ID {pose_id}")
+
+    def callback_goal_pose_reached(self, msg : Int16):
+        ''' Checks the received confirmation ID and sets at_desired_goal_pose flag accordingly
+        '''
+        received_id = msg.data
+        if received_id == self.joint_list_pos:
+            rospy.logwarn(f"[camera calibration] Received correct confirmation ID {received_id}")
+            self.at_desired_goal_pose = True
+        # Only for testing
+        elif received_id == 99:
+            self.joint_list_pos = 8
+            rospy.logwarn("[camera calibration] joint position set to 8")
+        else:
+            rospy.logwarn(f"[camera calibration] !ERR! Received incorrect confirmation ID {received_id}")
+
+    def rgb_ir_calibration(self, path):
+        """ This function calibrates the rgb and ir camera:
+            Saves all important parameters as .npy and write new yaml file for camera driver
+            It also calculates the extrinsic parameter between RGB and IR camera"""
+
+        # Calibrate RGB Single Camera
+        ret_rgb, cameraMatrix_rgb, dist_rgb, rvecs_rgb, self.tvecs_rgb = cv.calibrateCamera(self.objpoints, self.imgpoints_rgb, self.frameSize_rgb, None, None, flags=cv.CALIB_RATIONAL_MODEL)
+        # Convert rvecs To Rotation Matrix For Hand In Eye
+        for rvec in rvecs_rgb:
+            rmat, jacobian = cv.Rodrigues(rvec)
+            self.rmat_rgb.append(rmat) 
+      
+        # Calibrate IR Single Camera
+        ret_ir, cameraMatrix_ir, dist_ir, rvecs_ir, tvecs_ir = cv.calibrateCamera(self.objpoints, self.imgpoints_ir, self.frameSize_ir, None, None, flags=cv.CALIB_RATIONAL_MODEL)
+
+        # Calibrate Stereo Camera: extrinsic parameters between RGB and IR camera
+        retStereo, cameraMatrix_stereo_rgb, dist_stereo_rgb, cameraMatrix_stereo_ir, dist_stereo_ir, self.rvec_stereo, self.tvec_stereo, essentialMatrix, fundamentalMatrix = cv.stereoCalibrate(self.objpoints, self.imgpoints_rgb, self.imgpoints_ir, cameraMatrix_rgb, dist_rgb, cameraMatrix_ir, dist_ir, None, flags = (cv.CALIB_FIX_INTRINSIC + cv.CALIB_RATIONAL_MODEL))
+        rospy.logwarn("[camera calibration] Calibrated RGB, IR and Stereo Camera successfully")
+        print(cameraMatrix_rgb)
+        print(dist_rgb)
+        print(cameraMatrix_ir)
+        print(dist_ir)
+        self.save_calibration_results(path)
+        
+
+    def save_calibration_results(self, path):
+        np.save(path + "/R_gripper2base.npy", self.R_gripper2base)
+        np.save(path + "/t_gripper2base.npy", self.t_gripper2base)
+        np.save(path + "/rmat_rgb.npy", self.rmat_rgb)
+        np.save(path + "/tvecs_rgb.npy", self.tvecs_rgb)
+        np.save(path + "/rvec_stereo.npy", self.rvec_stereo)
+        np.save(path + "/tvec_stereo.npy", self.tvec_stereo)
+        rospy.logwarn("[camera calibration] Saved calibration result in desired path")
+
+    
+
+    def main_calibration(self):
+        # Load Joint List For Goal Positions
+        joint_list = np.load(self.joint_list_dir)
+        print("Len(joint_list)")
+        print(len(joint_list))
+
+        # Publish First Goal Position by giving Joint List (7 Angles) and Joint List Position (Out of All)
+        self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
+
+
+        while not rospy.is_shutdown() and not self.joint_list_pos >= len(joint_list):
+            self.create_and_draw_image_points(self.visualize_calibration_process)
+            if self.at_desired_goal_pose == True:
+                self.collect_calibration_data()
+                # Prepare For Next Goal Position
+                self.at_desired_goal_pose = False
+                self.joint_list_pos += 1
+                if self.joint_list_pos < len(joint_list):
+                    self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
+         
+        self.rgb_ir_calibration(path)
+
+
+
+
+    def cleanup(self):
+        print ("Shutting down vision node.")
+        cv2.destroyAllWindows()   
+
+def main(args):       
+    try:
+        CameraCalibration()
+        rospy.spin()
+    except KeyboardInterrupt:
+        print ("Shutting down vision node.")
+        cv.DestroyAllWindows()
+
+if __name__ == '__main__':
+    main(sys.argv)
