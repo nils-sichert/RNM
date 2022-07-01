@@ -57,8 +57,8 @@ class ProcessManager:
         self.pub_goal_pose_reached_pub  = rospy.Publisher("/goal_pose_reached", Int16, queue_size=1)
 
         # ROS Subscriber
-        self.sub_needle_goal_pose   = rospy.Subscriber('~/needle_goal_pose', Float64MultiArray, self.callback_needle_goal_pose)
-        self.sub_goal_pose_js       = rospy.Subscriber('~/goal_pose_js', Float64MultiArray, self.callback_goal_pose_js )
+        self.sub_needle_goal_pose   = rospy.Subscriber('/needle_goal_pose', Float64MultiArray, self.callback_needle_goal_pose)
+        self.sub_goal_pose_js       = rospy.Subscriber('/goal_pose_js', Float64MultiArray, self.callback_goal_pose_js )
 
         # Ros Helper/ Debuging
         self.user_execution_command = rospy.set_param('/user_execution_command', False)
@@ -96,7 +96,10 @@ class ProcessManager:
     def get_user_execution_command(self):
         ''' /TODO
         '''
-        self.user_execution_command = rospy.get_param('/user_execution_command', False)
+        new_state = rospy.get_param('/user_execution_command', False)
+        if not self.user_execution_command and new_state:
+            rospy.logwarn("[PM] Received user execution command")
+        self.user_execution_command = new_state
    
     def is_topic_published(self, topic_name : str):
         ''' Checks the rostopic list for the given topic 
