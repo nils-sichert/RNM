@@ -28,9 +28,9 @@ class CameraCalibration():
         # Set To False If Calibration Shouldn't Be Visible In Window Frame
         self.visualize_calibration_process = True
         # Path For Calibration Results
-        self.result_path        = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/calibration_results" 
+        self.result_path        = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_results')  
         # Path To Read-In Desired Joint List
-        self.joint_list_dir     = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/joint_list/camera_calibration/collected_joint_list.npy"
+        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset001/collected_joint_list.npy')  
         # Joint State Topic
         self.joint_state_topic  = rospy.get_param('/joint_state_topic', '/joint_states')
         # Image topics
@@ -251,7 +251,7 @@ class CameraCalibration():
         rospy.logwarn('[CC] Starting main calibration...')
 
         # Load Joint List For Goal Positions
-        joint_list = np.load(self.joint_list_dir)
+        joint_list = np.load(self.joint_list_path)
         print("Len(joint_list)")
         print(len(joint_list))
 
