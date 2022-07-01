@@ -15,7 +15,7 @@ from trajectory_planner_simple import trajectory_planner_simple
 from motion_executor import MotionExecutor
 
 class MotionManager:
-    def __init__(self, joint_command_topic, joint_state_topic, err_tol=1e-3, debug=False):
+    def __init__(self, joint_command_topic, joint_state_topic="/joint_states", err_tol=1e-3, debug=False):
 
         # ROS communication
         #rospy.init_node("motion_manager")
@@ -90,6 +90,11 @@ class MotionManager:
     def move_preinsertion2target(self, MOVEMENT_SPEED):
         self.trajectory_planner.create_simple_trajectory(self.filename_path_insertion_joint_space, self.filename_trajectory_insertion, MOVEMENT_SPEED)
         self.motion_executor.run(self.filename_trajectory_insertion, self.get_current_pose(), MOVEMENT_SPEED)
+        return True
+
+    def move_target2init_pose(self):
+        self.motion_executor.run_reversed(self.filename_path_insertion_joint_space, self.get_current_pose(), MOVEMENT_SPEED)
+        self.motion_executor.run_reversed(self.filename_trajectory_insertion, self.get_current_pose(), MOVEMENT_SPEED)
         return True
 
     def get_max_dist_between_waypoints(self):

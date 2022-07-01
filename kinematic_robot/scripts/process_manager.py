@@ -32,7 +32,7 @@ class ProcessManager:
         # Load ROS Parameter
         self.joint_state_topic  = rospy.get_param('/joint_state_topic')
         self.joint_command_topic= rospy.get_param('/joint_command_topic')
-        self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
+        self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.1)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
         self.INIT_POSE          = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])
         
         # Objects
