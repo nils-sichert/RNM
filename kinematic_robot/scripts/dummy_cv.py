@@ -74,7 +74,7 @@ class DummyCV:
         msg.data    = pose
 
         self.pub_goal_pose_js.publish(msg)
-
+        return
 
     def get_curr_joint_state(self):
         ''' Get actual current joint states
@@ -86,8 +86,9 @@ class DummyCV:
     def important_stuff(self):
         ''' This function simulates important stuff which takes time
         '''
-        delay = np.random.randint(2, 5)
-        time.sleep(delay)
+        #delay = np.random.randint(2, 5)
+        #time.sleep(delay)
+        return
 
 
     def do_stuff_with_recorded_poses(self):
@@ -110,14 +111,14 @@ class DummyCV:
             while not self.at_desired_goal_pose:
                 if self.at_desired_goal_pose:
                     break
-
+            
             # Do something important
             #act_curr_pose = self.get_curr_joint_state()
             self.important_stuff()
 
         
         # Do more important stuff
-        self.publish_needle_goal_pose(self.calculate_needle_goal_pose)
+        self.publish_needle_goal_pose(self.calculate_needle_goal_pose())
 
         # /TODO: Signal finished calibration/registrtation to start 
 

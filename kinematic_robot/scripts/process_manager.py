@@ -130,9 +130,9 @@ class ProcessManager:
                     self.s1_cv_ready = True
                     self.reset_user_execution_command()
                     rospy.logwarn("[PM] s0 -> s1 Topics from CV detected")
-                    rospy.logwarn("[PM] Waiting for user execution command...")
+                    
 
-
+            rospy.logwarn("[PM] Waiting for user execution command...")
             # State 1: Camera Calibration and Target Acquisition-----------------------------------
             if self.s1_cv_ready and self.user_execution_command:
                 
