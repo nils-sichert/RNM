@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-
-from robot_kinematics import robot_kinematics
 import rospy
 import numpy as np
 import csv
@@ -9,12 +7,12 @@ from tqdm import tqdm
 # FIXME eine Zeile zu viel, dividieren durch 0 unterbinden, nan bei gleicher Position?
 
 class trajectory_planner_simple:
-    def __init__(self):
+    def __init__(self, robot_kinematics):
         ''' Parameters:
                 movement_speed (float): Movement speed for end effector [m/s] TODO: is that correct?
         '''
         # Instances
-        self.robot_kinematics = robot_kinematics()
+        self.robot_kinematics = robot_kinematics
 
     def create_point_to_point_traj(self, start_pose, end_pose, MOVEMENT_SPEED, file_input_waypoints, file_output_trajectory,):
         ''' Wraps create_simple_trajectory with auto waypoint file generation, such that a simple 

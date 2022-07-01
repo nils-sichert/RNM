@@ -1,36 +1,25 @@
 #!/usr/bin/env python3
-from fileinput import filename
 import rospy
 import os
-from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
 import csv
 import sys
-from robot_kinematics import robot_kinematics
 import numpy as np
 
 class MotionExecutor:
-    def __init__(self, command_topic):
+    def __init__(self, command_topic, robot_kinematics):
         
-        if "sim" in command_topic:
-            msg = rospy.wait_for_message("/joint_states", JointState, rospy.Duration(10))
-        else:
-            msg = rospy.wait_for_message("/franka_state_controller/joint_states_desired", JointState, rospy.Duration(10))
-            # joint_states_desired is correct
-
+    
         self.pub     = rospy.Publisher(command_topic, Float64MultiArray, queue_size=1)
-        self.initial_joints = np.array(msg.position)
-        self.publish_list = []
-        self.move2start_list = []
-        self.movement_speed = 0.01/1000
-        self.robot_kinematics = robot_kinematics()
+        self.robot_kinematics = robot_kinematics
 
-    def run(self, filename):
+    def run(self, filename, current_pose, MOVEMENT_SPEED):
         self.get_joint_list(filename)
-        self.move_to_start()
+        self.move_to_start(current_pose, MOVEMENT_SPEED)
         self.publish_joint()
         
     def get_joint_list(self, filename):
+        self.publish_list = []
         with open((os.path.join(os.path.dirname(__file__),filename))) as f:
                         reader = csv.reader(f, delimiter=",")
                         for row in reader:
@@ -38,7 +27,7 @@ class MotionExecutor:
         rospy.logwarn("Got Joint List")
         return 0
 
-    def move_to_start(self):
+    def move_to_start(self, current_pose, MOVEMENT_SPEED):
         """
         Moves robot in desired start position. To get there a linear path between the current joint state and the target joint state 
         will be interpolatet. The movment speed is be set and should not be above 0.02 m/s.
@@ -47,25 +36,25 @@ class MotionExecutor:
         #FIXME fängt nicht komplett auf Start an (Z-Koordiante??)
 
         # get current cartesian robot state
-        current_pose = self.robot_kinematics.get_pose_from_angles(self.initial_joints)
+        current_pose_cartesian = self.robot_kinematics.get_pose_from_angles(current_pose)
 
         # get target cartesian robot state
         start_pose = self.robot_kinematics.get_pose_from_angles(self.publish_list[0])     # /FIXME confirm correction and error handling if List is empty
-        delta_pose = start_pose - current_pose
+        delta_pose = start_pose - current_pose_cartesian
         err_tol = 1e-2
         if np.abs(delta_pose).max() > err_tol:
             # calculate distance between cartesian coordinates of current and start position
             dist = np.linalg.norm(start_pose[9:12] -  current_pose[9:12])
 
             # divide distance by the movement speed to calculate number of nessesary interpolations to reach the movement speed during an updaterate of 1000 Hz.
-            steps = int(dist/self.movement_speed)
-            delta_joints_per_step = (self.publish_list[0] - self.initial_joints)/steps
+            steps = int(dist/MOVEMENT_SPEED)
+            delta_joints_per_step = (self.publish_list[0] - current_pose)/steps
             
             # set Updaterate to 1000 Hz and publish every 1ms a new joint state
             rate    = rospy.Rate(1000)
             for j in range(steps+1):
 
-                joint = self.initial_joints + j*delta_joints_per_step
+                joint = current_pose + j*delta_joints_per_step
                 msg = Float64MultiArray()
                 msg.data = joint
                 self.pub.publish(msg)

@@ -68,6 +68,14 @@ class DummyCV:
 
         rospy.logwarn(f"[DummyCV] Send new goal_pose_js with ID {pose_id}")
 
+    def publish_needle_goal_pose(self, pose):
+
+        msg         = Float64MultiArray()
+        msg.data    = pose
+
+        self.pub_goal_pose_js.publish(msg)
+
+
     def get_curr_joint_state(self):
         ''' Get actual current joint states
         '''
@@ -109,11 +117,15 @@ class DummyCV:
 
         
         # Do more important stuff
-
+        self.publish_needle_goal_pose(self.calculate_needle_goal_pose)
 
         # /TODO: Signal finished calibration/registrtation to start 
 
-
+    def calculate_needle_goal_pose(self):
+        #FIXME actual needle goal pose calculation
+        needle_goal_pose  = np.array([7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01,  0.30874679,  0.24655161, 0.45860086] )
+        
+        return needle_goal_pose
 
 if __name__ == '__main__':
     
