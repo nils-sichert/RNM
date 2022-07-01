@@ -4,6 +4,7 @@ from std_msgs.msg import Float64MultiArray
 from std_msgs.msg import Int16
 from motion_manager import MotionManager
 import time
+import numpy as np
 
     # Pre-run
     #   launch launchfile with:
@@ -48,7 +49,7 @@ class ProcessManager:
         self.joint_state_topic  = rospy.get_param('/joint_state_topic')
         self.joint_command_topic= rospy.get_param('/joint_command_topic')
         self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
-        self.INIT_POSE          = rospy.get_param('/init_pose', [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06])
+        self.INIT_POSE          = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])
         
         # Objects
         self.motion_manager     = MotionManager(self.joint_command_topic, self.joint_state_topic)
