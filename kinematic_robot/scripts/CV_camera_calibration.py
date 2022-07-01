@@ -30,7 +30,7 @@ class CameraCalibration():
         # Path For Calibration Results
         self.result_path        = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_results')  
         # Path To Read-In Desired Joint List
-        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset001/collected_joint_list.npy')  
+        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset001/collected_joint_list2.npy')  
         # Joint State Topic
         self.joint_state_topic  = rospy.get_param('/joint_state_topic', '/joint_states')
         # Image topics
@@ -87,7 +87,7 @@ class CameraCalibration():
         self.sub_task_command       = rospy.Subscriber('/task_command', String, self.callback_task_command)
 
         self.pub_goal_pose_js       = rospy.Publisher("/goal_pose_js", Float64MultiArray, queue_size=1)
-        rospy.loginfo("[CC] Waiting for image topics...")
+        rospy.logwarn("[CC] Waiting for image topics...")
         time.sleep(1)
 
 
@@ -281,6 +281,8 @@ class CameraCalibration():
                     self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
          
         self.rgb_ir_calibration()
+
+        rospy.logwarn('[CC] Main process finished')
 
 
     def cleanup(self):
