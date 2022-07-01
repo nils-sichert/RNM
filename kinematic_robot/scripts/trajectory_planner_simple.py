@@ -56,9 +56,9 @@ class trajectory_planner_simple:
         # Load planned path from .csv file
         joint_list = []
         with open((os.path.join(os.path.dirname(__file__), file_input_waypoints))) as f:
-                reader = csv.reader(f, delimiter=",")
-                for row in reader:
-                    joint_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
+            reader = csv.reader(f, delimiter=",")
+            for row in reader:
+                joint_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
     
         # delete content of existing file
         with open(os.path.join(os.path.dirname(__file__), file_output_trajectory),'w+') as file:
@@ -92,7 +92,7 @@ class trajectory_planner_simple:
         rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
         return 
 
-    def create_simple_trajectory_JS(self, file_input_waypoints, file_output_trajectory, MOVEMENT_SPEED, initial_waypoint=None):
+    def create_simple_trajectory_JS(self, file_input_waypoints, file_output_trajectory, max_joint_vel=2.1750/4, initial_waypoint=None):
         ''' Load file with waypoints in joint-space and write file with interpolated joint-angles 
             sampled at 1kHz (Step size of 1ms). An initial waypoint can be set in case the current 
             robot pose is not the same as the first input waypoint. This is useful for hardcoded 
@@ -103,11 +103,11 @@ class trajectory_planner_simple:
                 initial_waypoint (List): An initial waypoint in joint-space can preceed the first waypoint in the input file
         '''
         # Load planned path from .csv file
-        joint_list = []
+        waypoints = []
         with open((os.path.join(os.path.dirname(__file__), file_input_waypoints))) as f:
-                reader = csv.reader(f, delimiter=",")
-                for row in reader:
-                    joint_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
+            reader = csv.reader(f, delimiter=",")
+            for row in reader:
+                waypoints.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
     
         # delete content of existing file
         with open(os.path.join(os.path.dirname(__file__), file_output_trajectory),'w+') as file:
@@ -115,24 +115,33 @@ class trajectory_planner_simple:
 
         # Prepend initial waypoint
         if not initial_waypoint == None:
-            joint_list.insert(0, initial_waypoint) 
+            waypoints.insert(0, initial_waypoint)
+
+        waypoints   = np.array(waypoints)
+        num_wp      = waypoints.shape[0]
+        num_joints  = waypoints.shape[1]
 
         # calculate number of interpolations between each given waypoint
-        for i in tqdm(range(len(joint_list) - 1), ncols=100):
-            current_joint  = np.array(joint_list[i])
-            next_joint     = np.array(joint_list[i + 1])
+        for wp_id in tqdm(range(num_wp - 1), ncols=100):
+            curr_waypoint   = waypoints[wp_id]
+            next_waypoint   = waypoints[wp_id + 1]     
 
-            max_delta_joint = np.abs(next_joint-current_joint).max()
-            steps           = int(max_delta_joint / MOVEMENT_SPEED)
-            delta_joints_per_step = (next_joint - current_joint) / steps
+            delta       = next_waypoint - curr_waypoint
+            max_delta   = np.abs(delta).max()
+            num_steps   = int(max_delta / max_joint_vel)
+
+            traj_points = np.zeros([num_steps, num_joints])
+
+            for joint_id in range(num_joints):
+                for step_id in range(num_steps):
+                    traj_points[step_id, joint_id]  = curr_waypoint[joint_id] + delta[joint_id] / num_steps * step_id
 
             # calculate each joint state for given movement speed and 1000Hz publishing rate
             with open((os.path.join(os.path.dirname(__file__), file_output_trajectory)), mode="a", newline="") as f:    
                 writer = csv.writer(f, delimiter=",")
-                for j in range(steps + 1):
-                    sample_joint = current_joint + j * delta_joints_per_step
-                    writer.writerow(sample_joint)
-                writer.writerow(joint_list[-1])
+                for traj_point in traj_points:
+                    writer.writerow(traj_point)
+                #writer.writerow(waypoints[-1])
         
         rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
         return 
