@@ -15,8 +15,8 @@ class DummyCV:
         # ROS
         rospy.init_node('dummy_cv', anonymous=True)
 
-        self.pub_needle_goal_pose   = rospy.Publisher('~/needle_goal_pose', Float64MultiArray, queue_size=1)
-        self.pub_goal_pose_js       = rospy.Publisher("~/goal_pose_js", Float64MultiArray, queue_size=1)
+        self.pub_goal_pose_js       = rospy.Publisher("/goal_pose_js", Float64MultiArray, queue_size=1)
+        self.pub_needle_goal_pose   = rospy.Publisher('/needle_goal_pose', Float64MultiArray, queue_size=1)
         
         self.sub_goal_pose_reached  = rospy.Subscriber("~/goal_pose_reached", Int16, self.callback_goal_pose_reached)
         self.sub_user_input_dummy   = rospy.Subscriber('~/user_input_dummy', String, self.callback_user_input_dummy)
@@ -73,7 +73,7 @@ class DummyCV:
         msg         = Float64MultiArray()
         msg.data    = pose
 
-        self.pub_goal_pose_js.publish(msg)
+        self.pub_needle_goal_pose.publish(msg)
         return
 
     def get_curr_joint_state(self):

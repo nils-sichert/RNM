@@ -10,8 +10,9 @@ class MotionExecutor:
     def __init__(self, command_topic, robot_kinematics):
         
     
-        self.pub     = rospy.Publisher(command_topic, Float64MultiArray, queue_size=1)
-        self.robot_kinematics = robot_kinematics
+        self.pub                = rospy.Publisher(command_topic, Float64MultiArray, queue_size=1)
+        self.robot_kinematics   = robot_kinematics
+        self.publish_list       = []
 
     def run(self, filename, current_pose, MOVEMENT_SPEED):
         self.get_joint_list(filename)
@@ -21,16 +22,16 @@ class MotionExecutor:
     def get_joint_list(self, filename):
         self.publish_list = []
         with open((os.path.join(os.path.dirname(__file__),filename))) as f:
-                        reader = csv.reader(f, delimiter=",")
-                        for row in reader:
-                            self.publish_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
-        rospy.logwarn("Got Joint List")
+            reader = csv.reader(f, delimiter=",")
+            for row in reader:
+                self.publish_list.append([float(row[0]),float(row[1]),float(row[2]),float(row[3]),float(row[4]),float(row[5]),float(row[6])])
+        rospy.logwarn("[ME] Got Joint List")
         return 0
 
     def move_to_start(self, current_pose, MOVEMENT_SPEED):
         """
         Moves robot in desired start position. To get there a linear path between the current joint state and the target joint state 
-        will be interpolatet. The movment speed is be set and should not be above 0.02 m/s.
+        will be interpolatet. The movement speed is set and should not be above 0.02 m/s.
         """
         #FIXME mit trajectory_planner kombinieren -> Methode schreiben
         #FIXME fängt nicht komplett auf Start an (Z-Koordiante??)
@@ -43,6 +44,7 @@ class MotionExecutor:
         delta_pose = start_pose - current_pose_cartesian
         err_tol = 1e-2
         if np.abs(delta_pose).max() > err_tol:
+            rospy.logwarn("[ME] Robot NOT at planned start pose")  
             # calculate distance between cartesian coordinates of current and start position
             dist = np.linalg.norm(start_pose[9:12] -  current_pose[9:12])
 
@@ -59,9 +61,9 @@ class MotionExecutor:
                 msg.data = joint
                 self.pub.publish(msg)
                 rate.sleep()
-            rospy.logwarn("Moved to Start-Point")   
+            rospy.logwarn("[ME] Moved robot to planned start pose")   
         else:
-            rospy.logwarn("Be on start position")
+            rospy.logwarn("[ME] Robot at planned start pose")
         
         return
 
@@ -72,7 +74,7 @@ class MotionExecutor:
         # publish new joint every 1ms
         rate    = rospy.Rate(1000)
 
-        rospy.logwarn("Start publishing joints.")
+        rospy.logwarn("[ME] Start publishing joints.")
         for i in range(len(self.publish_list)):
             
             joint = self.publish_list[i]
@@ -81,14 +83,14 @@ class MotionExecutor:
             self.pub.publish(msg)
             rate.sleep()
         
-        rospy.logwarn("Published all Joints.")
+        rospy.logwarn("[ME] Published all Joints.")
         
         
 # for testing purpose
 def main(argv):
     rospy.init_node("variable_publisher")
     command_topic = rospy.get_param("~command_topic", "/joint_position_example_controller_sim/joint_command")
-    rospy.logwarn("Using topic: " + str(command_topic))
+    rospy.logwarn("[ME] Using topic: " + str(command_topic))
 
     MotionExecution = MotionExecutor(command_topic)
     MotionExecution.run()

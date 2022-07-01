@@ -88,7 +88,7 @@ class trajectory_planner_simple:
                 writer.writerow(joint_list[-1])
             current_pose = next_pose
         
-        rospy.logwarn(f'Generated simple trajectory in file {file_output_trajectory}')
+        rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
         return 
 
 # for test purposes

@@ -66,7 +66,7 @@ class MotionManager:
         self.max_dist_between_supports = rospy.get_param("~max_dist_between_supports", 0.01)
 
         # Debug
-        #rospy.logwarn("Current A:" + str(self.current_A))
+        #rospy.logwarn("[MM] Current A:" + str(self.current_A))
 
     def callback_joint_states(self, msg):
         ''' Callback function for the topic_joint_states. Stores current angles in object variable'''
