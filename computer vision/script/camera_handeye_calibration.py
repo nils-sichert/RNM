@@ -27,9 +27,9 @@ class CameraCalibration():
         # Path To Read-In Desired Joint List
         self.joint_list_dir = "/home/rnm/catkin_ws/src/panda/panda_vision/scripts/joint_list/camera_calibration/collected_joint_list.npy"
         # Topic To Publish Next Goal Pose e.g joint list + position in list
-        self.goal_pose_topic = "~/goal_pose_js"
+        self.goal_pose_topic = "/goal_pose_js"
         # Topic To Subscribe To Check If Goal Pose Is Reached (Int16) e.g 0, 1, 2, 3,.....last joint list index
-        self.goal_pose_reached_topic = "~/goal_pose_reached"
+        self.goal_pose_reached_topic = "/goal_pose_reached"
 
         # World Frame Object Points: same chessboard for RGB and IR camera
         self.objpoints = [] # 3d point in real world space
@@ -188,12 +188,6 @@ class CameraCalibration():
         if received_id == self.joint_list_pos:
             rospy.logwarn(f"[camera calibration] Received correct confirmation ID {received_id}")
             self.at_desired_goal_pose = True
-        # Only for testing
-        elif received_id == 99:
-            self.joint_list_pos = 8
-            rospy.logwarn("[camera calibration] joint position set to 8")
-        else:
-            rospy.logwarn(f"[camera calibration] !ERR! Received incorrect confirmation ID {received_id}")
 
     def rgb_ir_calibration(self, path):
         """ This function calibrates the rgb and ir camera:
@@ -229,25 +223,44 @@ class CameraCalibration():
         np.save(path + "/tvec_stereo.npy", self.tvec_stereo)
         rospy.logwarn("[camera calibration] Saved calibration result in desired path")
 
+
+    def is_topic_published(self, topic_name : str):
+        ''' Checks the rostopic list for the given topic 
+        '''
+        topics  = rospy.get_published_topics()
+        topics  = [topics[i][0] for i in range(len(topics))]
+        return (topic_name in topics)
     
 
     def main_calibration(self):
+
+        rospy.logwarn('[camera calibration] Starting main calibration...')
+
         # Load Joint List For Goal Positions
         joint_list = np.load(self.joint_list_dir)
         print("Len(joint_list)")
         print(len(joint_list))
 
+        # Wait until process_manager is ready
+        rospy.logwarn('[camera calibration] Waiting for PM...')
+        while not self.is_topic_published('/goal_pose_reached'): pass
+        rospy.logwarn('[camera calibration] Topics from PM detected')
+        time.sleep(2)
+
         # Publish First Goal Position by giving Joint List (7 Angles) and Joint List Position (Out of All)
         self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
 
+        while self.joint_list_pos < len(joint_list):
 
-        while not rospy.is_shutdown() and not self.joint_list_pos >= len(joint_list):
             self.create_and_draw_image_points(self.visualize_calibration_process)
-            if self.at_desired_goal_pose == True:
+            
+            if self.at_desired_goal_pose:
                 self.collect_calibration_data()
                 # Prepare For Next Goal Position
                 self.at_desired_goal_pose = False
+
                 self.joint_list_pos += 1
+                
                 if self.joint_list_pos < len(joint_list):
                     self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
          
@@ -257,7 +270,7 @@ class CameraCalibration():
 
 
     def cleanup(self):
-        print ("Shutting down vision node.")
+        rospy.logwarn("[CC] Shutting down vision node.")
         cv2.destroyAllWindows()   
 
 def main(args):       
@@ -265,7 +278,7 @@ def main(args):
         CameraCalibration()
         rospy.spin()
     except KeyboardInterrupt:
-        print ("Shutting down vision node.")
+        rospy.logwarn("[CC] Shutting down vision node.")
         cv.DestroyAllWindows()
 
 if __name__ == '__main__':

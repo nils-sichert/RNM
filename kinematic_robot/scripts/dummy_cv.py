@@ -44,7 +44,7 @@ class DummyCV:
         self.go_to_next_pose = True
         rospy.logwarn("[dCV] User input received")
 
-    def callback_goal_pose_reached(self, msg : Float64MultiArray):
+    def callback_goal_pose_reached(self, msg : Int16):
         ''' Checks the received confirmation ID and sets at_desired_goal_pose flag accordingly
         '''
         received_id = msg.data
