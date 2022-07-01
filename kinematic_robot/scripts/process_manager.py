@@ -47,9 +47,7 @@ class ProcessManager:
         # ROS inits
         rospy.init_node('process_manager', anonymous=True)
 
-        # Objects
-        self.motion_manager = MotionManager('/joint_position_example_controller_sim/joint_command')  # TODO: replace with get params
-
+       
         # Load ROS Parameter
         self.MOVEMENT_SPEED = rospy.get_param("~/movement_speed", 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
         self.init_pose = rospy.get_param('~init_pose', [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06])
@@ -62,6 +60,9 @@ class ProcessManager:
 
         # Ros Helper/ Debuging
         self.user_execution_command = rospy.set_param('/user_execution_command', False)
+
+        # Objects
+        self.motion_manager = MotionManager('/joint_position_example_controller_sim/joint_command')  # TODO: replace with get params
 
 
         time.sleep(1)
@@ -112,7 +113,7 @@ class ProcessManager:
     def reset_user_execution_command(self):
         ''' /TODO
         '''
-        rospy.set_param('~user_execution_command', False)
+        self.user_execution_command = rospy.set_param('/user_execution_command', False)
 
 
     def main_process(self):
@@ -147,17 +148,18 @@ class ProcessManager:
 
                 # Exit State - when target acquired
                 if self.s2_target_acquired:                 # Is True if VS has published needle goal pose
+                    rospy.logwarn("[PM] Target acquired, moving to inital pose.")
                     self.motion_manager.move2goal_js(self.init_pose, self.MOVEMENT_SPEED)
-                                                            # TODO In case of aborting program due to Safety barrier, write all values into file
+                    
                     self.s1_cv_ready = False
                     self.reset_user_execution_command()
                     rospy.logwarn("[PM] s1 -> s2 CV has successfully acquired target")
                     rospy.logwarn("[PM] Waiting for user execution command...")
-                
+                    # TODO In case of aborting program due to Safety barrier, write all values into file
 
             # State 2: Move to pre-insertion point--------------------------------------------------
             if self.s2_target_acquired and self.user_execution_command:
-                self.s3_at_pre_insertion = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED)  # FIXME Add function, 
+                self.s3_at_pre_insertion = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
                                                                                                 # calculate two list with help of needle goal:   
                                                                                                 # 1. Start -> Pre-Inj: calculated_trajectory_start2preinc.csv
                                                                                                 # 2. Pre-Inj -> Target: calculated_trajectory_preinj2target.csv
@@ -174,7 +176,7 @@ class ProcessManager:
 
             # State 3: Execute insertion------------------------------------------------------------
             if self.s3_at_pre_insertion and self.user_execution_command:
-                self.s4_reverse_active = self.motion_manager.move_preinsertion2target()                      # FIXME Add function
+                self.s4_reverse_active = self.motion_manager.move_preinsertion2target(self.MOVEMENT_SPEED)                     
                                                                                                 # execute motion executor: calculated_trajectory_preinc2target.csv
                                                                                                 # return True
                 # Exit State
@@ -187,7 +189,7 @@ class ProcessManager:
 
             # State 4: Reverse insertion------------------------------------------------------------
             if self.s4_reverse_active and self.user_execution_command:
-                self.motion_manager.move_target2start
+                self.motion_manager.move_target2init_pose()  #FIXME Add function
                 self.reset_user_execution_command()
                 rospy.logwarn("[PM] s4 -> s0 Successfully reversed robot to inital pose")
                 rospy.logwarn("[PM] Waiting for user execution command...")

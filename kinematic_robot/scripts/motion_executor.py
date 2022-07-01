@@ -10,7 +10,7 @@ class MotionExecutor:
     def __init__(self, command_topic, robot_kinematics):
         
     
-        self.pub                = rospy.Publisher(command_topic, Float64MultiArray, queue_size=1)
+        self.pub_joint_state    = rospy.Publisher(command_topic, Float64MultiArray, queue_size=1)
         self.robot_kinematics   = robot_kinematics
         self.publish_list       = []
 
@@ -59,7 +59,7 @@ class MotionExecutor:
                 joint = current_pose + j*delta_joints_per_step
                 msg = Float64MultiArray()
                 msg.data = joint
-                self.pub.publish(msg)
+                self.pub_joint_state.publish(msg)
                 rate.sleep()
             rospy.logwarn("[ME] Moved robot to planned start pose")   
         else:
@@ -80,7 +80,7 @@ class MotionExecutor:
             joint = self.publish_list[i]
             msg = Float64MultiArray()
             msg.data = joint
-            self.pub.publish(msg)
+            self.pub_joint_state.publish(msg)
             rate.sleep()
         
         rospy.logwarn("[ME] Published all Joints.")
