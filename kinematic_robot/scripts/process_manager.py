@@ -13,17 +13,15 @@ class ProcessManager:
 
     def __init__(self):
 
-        # Task commands
-        self.taskcmd_camera_calibration = "camera_calibration_start"
-        # TODO have more taskcmds for other CV nodes
-
         # Flags
-        self.s0_reset               = True
-        self.s1_cv_ready            = False
-        self.s2_target_acquired     = False	
-        self.s3_at_pre_insertion    = False
-        self.s4_reverse_active      = False
+        # /TODO delete if finally unnecessary
+        #self.s0_reset               = True     
+        #self.s1_cv_ready            = False
+        #self.s3_at_pre_insertion    = False
+        #self.s4_reverse_active      = False
 
+        # /TODO currenty placeholder, replace with approriate flags to signal CV node done status
+        self.s2_target_acquired     = False	
         
         self.goal_pose_js_filename  = None
 
@@ -32,7 +30,7 @@ class ProcessManager:
 
         self.crr_task_command   = None
 
-        # Process flow
+        # Internal process flow control
         self.all_states = [ 's0_start',                 # Exit when PM is ready -> useful if next states should be skipped
                             's1_wait_for_cv',           # Exit when CV nodes ready -> Ready flags set
                             's2_camera_calibration',    # Exit when CC finished -> camera calibrated, result file on disk
@@ -41,13 +39,21 @@ class ProcessManager:
                             's5_pre_insertion',         # Exit when robot at pre insertion pose
                             's6_insertion',             # Exit when robot at insertion pose
                             's7_post_insertion',        # Exit when robot at post insertion pose (reverse to pre insertion pose)
-                            's8_end',                   # Never exit unless user command
-                            'sX_wait_for_user'
+                            's8_end'                    # Exit immediately -> useful for end tasks
                             ]
 
         self.curr_state = 's0_start'            # Current state
         self.user_execution_command = False     # Confirm next state with user_execution_command
         self.user_next_state        = None      # Ovrride next state with user_next_state
+
+        self.first_run_in_state     = False     # Set to true when state transition in go_to_next_state
+                                                # set to false after first run in state in is_first_run_in_state
+
+        # Task commands
+        self.TASKCMD_camera_calibration     = "camera_calibration_start"
+        self.TASKCMD_handeye_calibration    = "handeye_calibration_start"
+        self.TASKCMD_model_registration     = "model_registration_start"
+
 
 
         # ROS inits
@@ -150,7 +156,18 @@ class ProcessManager:
     # Process flow control methods
     def is_in_state(self, state_name : str):
         ''' Returns bool if process_manager is in state_name state '''
+        assert state_name in self.all_states, f'state_name "{state_name}" not found in all_states'
         return self.curr_state == state_name
+
+    def is_first_run_in_state(self):
+        ''' Returns if this is the first run in the current state, such that some tasks can
+            be activated only once.
+        '''
+        if self.first_run_in_state:
+            self.first_run_in_state = False
+            return True
+        else:
+            return False        
 
     def go_to_next_state(self):
         ''' Reads curr_state and sets next_state according to all_states 
@@ -159,7 +176,7 @@ class ProcessManager:
         
         # Check if state is in all_states, get state index
         curr_state  = self.curr_state
-        assert curr_state in self.all_states, 'curr_state not found in all_states'
+        assert curr_state in self.all_states, f'curr_state "{curr_state}" not found in all_states'
         state_idx   = self.all_states.index(curr_state)
 
         # Set next state. Set to none, if last state has been reached
@@ -185,12 +202,15 @@ class ProcessManager:
                 self.reset_user_next_state()
                 break
 
+            # Update user inputs
             self.get_user_execution_command()
             self.get_user_next_state()
         
         # Assign curr_state to next_state and continue PM
         self.curr_state = next_state
+        self.do_once_in_state = True
         rospy.logwarn(f'[PM] Go to state = {self.curr_state}')
+
 
 
 
@@ -205,98 +225,124 @@ class ProcessManager:
             # S0 Start-----------------------------------------------------------------------------
             # Go directly to next state. This allows to do init process and accept user input at start
             if self.is_in_state('s0_start'):
-                pass
+                self.go_to_next_state()
 
-
-            # S0 Wait for CV-----------------------------------------------------------------------
-            if self.is_in_state('s0_wait_for_cv'):
+            
+            # S1 Wait for CV-----------------------------------------------------------------------
+            # Wait until CV nodes are ready
+            # /TODO this is currently done by only checking if /goal_pose_js topic is published
+            # /TODO this is not sufficient to test if ALL CV nodes are ready
+            if self.is_in_state('s1_wait_for_cv'):
 
                 if self.is_topic_published('/goal_pose_js'):
-                    self.s0_reset    = False
-                    self.s1_cv_ready = True
-                    self.reset_user_execution_command()
-                    rospy.logwarn("[PM] s0 -> s1 Topics from CV detected")
-                    rospy.logwarn("[PM] Waiting for user execution command...")
+                    rospy.logwarn("[PM] Topics from CV detected")
+                    self.go_to_next_state()
 
-            # State 0: Reset state-----------------------------------------------------------------
-            if self.s0_reset:
-                self.s4_reverse_active = False
-
-                # Exit State - when CV published topics 
-                if self.is_topic_published('/goal_pose_js'):
-                    self.s0_reset    = False
-                    self.s1_cv_ready = True
-                    self.reset_user_execution_command()
-                    rospy.logwarn("[PM] s0 -> s1 Topics from CV detected")
-                    rospy.logwarn("[PM] Waiting for user execution command...")
-
-
-            # State 1: Camera Calibration and Target Acquisition-----------------------------------
-            if self.s1_cv_ready and self.user_execution_command:            
-                self.publish_task_command(self.taskcmd_camera_calibration)  # TODO: only publish once
+            
+            # S2 Do camera calibration-------------------------------------------------------------
+            # Start camera calibration, go to goal poses, wait for CC results
+            # /TODO Finihsed CC checked by flag s2_target_ecquired. Change to "CC_finished" signal
+            if self.is_in_state('s2_camera_calibration'):
+                
+                if self.is_first_run_in_state():
+                    self.publish_task_command(self.TASKCMD_camera_calibration)
                 
                 if not self.old_goal_pose_id == self.crr_goal_pose_id:
                     self.old_goal_pose_id = self.crr_goal_pose_id
                     self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)   
                     self.publish_goal_pose_reached(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
 
+                # Exit state - when camera is calibrated
+                CC_finished = self.s2_target_acquired   # /FIXME change to better CC_finished signal
+                if CC_finished:                         # Is True if VS has published needle goal pose
+                    rospy.logwarn("[PM] Camera calibration finished")
+                    #self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
+                    self.go_to_next_state()
 
-                # Exit State - when target acquired
-                if self.s2_target_acquired:                 # Is True if VS has published needle goal pose
-                    rospy.logwarn("[PM] Target acquired, moving to inital pose.")
-                    self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
-                    
-                    self.s1_cv_ready = False
-                    self.reset_user_execution_command()
-                    rospy.logwarn("[PM] s1 -> s2 CV has successfully acquired target")
-                    rospy.logwarn("[PM] Waiting for user execution command...")
-                    # TODO In case of aborting program due to Safety barrier, write all values into file
 
-            # State 2: Move to pre-insertion point--------------------------------------------------
-            if self.s2_target_acquired and self.user_execution_command:
-                self.s3_at_pre_insertion = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
-                # calculate two list with help of needle goal:   
-                # 1. Start -> Pre-Inj: calculated_trajectory_start2preinc.csv
-                # 2. Pre-Inj -> Target: calculated_trajectory_preinj2target.csv
-                # execute motion executor: calculated_trajectory_start2preinc.csv
-                # return True
+            # S3 Do Hand eye calibration-----------------------------------------------------------
+            # Start Hand eye calibration, go to goal poses, wait for HEC results
+            # /TODO Finihsed HEC checked by flag s2_target_ecquired. Change to "HEC_finished" signal
+            if self.is_in_state('s3_handeye_calibration'):
                 
-                # Exit State
-                if self.s3_at_pre_insertion:
-                    self.s2_target_acquired = False
-                    self.reset_user_execution_command()
-                    rospy.logwarn("[PM] s2 -> s3 Successfully completed movement to pre-insertion point")
-                    rospy.logwarn("[PM] Waiting for user execution command...")
+                if self.is_first_run_in_state():
+                    self.publish_task_command(self.TASKCMD_handeye_calibration)
+                
+                if not self.old_goal_pose_id == self.crr_goal_pose_id:
+                    self.old_goal_pose_id = self.crr_goal_pose_id
+                    self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)   
+                    self.publish_goal_pose_reached(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
+
+                # Exit state - when hand eye is calibrated
+                HEC_finished = self.s2_target_acquired  # /FIXME change to better HEC_finished signal
+                if HEC_finished:                         # Is True if VS has published needle goal pose
+                    rospy.logwarn("[PM] Hand eye calibration finished")
+                    #self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
+                    self.go_to_next_state()
 
 
-            # State 3: Execute insertion------------------------------------------------------------
-            if self.s3_at_pre_insertion and self.user_execution_command:
-                self.s4_reverse_active = self.motion_manager.move_preinsertion2target(self.MOVEMENT_SPEED)                     
-                # execute motion executor: calculated_trajectory_preinc2target.csv
-                # return True
+            # S4 Do Model registrtaion-------------------------------------------------------------
+            # Start model registrtation, go to goal poses, wait for MR results (target acquired)
+            # /TODO Finihsed MR checked by flag s2_target_ecquired. Change to "MR_finished" signal
+            if self.is_in_state('s4_model_registration'):
+                
+                if self.is_first_run_in_state():
+                    self.publish_task_command(self.TASKCMD_model_registration)
+                
+                if not self.old_goal_pose_id == self.crr_goal_pose_id:
+                    self.old_goal_pose_id = self.crr_goal_pose_id
+                    self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)   
+                    self.publish_goal_pose_reached(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
 
-                # Exit State
-                if self.s4_reverse_active:
-                    self.s3_at_pre_insertion = False
-                    self.reset_user_execution_command()
-                    rospy.logwarn("[PM] s3 -> s4 Successfully completed needle insertion")
-                    rospy.logwarn("[PM] Waiting for user execution command...")
+                # Exit state - when model registrtation is done and target is acquired
+                MR_finished = self.s2_target_acquired   # /FIXME change to better MR_finished signal
+                if MR_finished:                         # Is True if VS has published needle goal pose
+                    rospy.logwarn("[PM] Model registration finished")
+                    self.go_to_next_state()
 
 
-            # State 4: Reverse insertion------------------------------------------------------------
-            if self.s4_reverse_active and self.user_execution_command:
-                self.motion_manager.move_target2init_pose()  #FIXME Add function
-                self.reset_user_execution_command()
-                rospy.logwarn("[PM] s4 -> s0 Successfully reversed robot to inital pose")
-                rospy.logwarn("[PM] Waiting for user execution command...")
+            # S5 Move to pre-insertion pose--------------------------------------------------------
+            # First move robot to initial pose then move robot to pre-insertion pose
+            if self.is_in_state('s5_pre_insertion'):
+                self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
+                motion_done = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
+                
+                # Exit state - when robot at pre insertion pose
+                if motion_done:
+                    rospy.logwarn("[PM] Successfully completed movement to pre-insertion point")
+                    self.go_to_next_state()
 
-                # Exit State
+
+            # S6 Execute insertion-----------------------------------------------------------------
+            # Insert needle to target, exit when at pose
+            if self.is_in_state('s6_insertion'):
+                motion_done = self.motion_manager.move_preinsertion2target(self.MOVEMENT_SPEED)                     
+
+                # Exit state - when robot at insertion pose
+                if motion_done:
+                    rospy.logwarn("[PM] Needle inserted")
+                    self.go_to_next_state()
+
+
+            # S7 Post insertion--------------------------------------------------------------------
+            # Reverse needle insertion, exit when at pose
+            # /TODO replace motion function with correct "reverse needle" function
+            if self.is_in_state('s7_post_insertion'):
+                self.motion_manager.move_target2init_pose() # /FIXME Add function
+                motion_done = True                          # /FIXME Get result from motion function
+
+                # Exit state - when robot at post insertion pose
+                if motion_done:
+                    rospy.logwarn("[PM] Successfully reversed robot to inital pose")
+                    self.go_to_next_state()
+
+
+            # S8 End state-------------------------------------------------------------------------
+            if self.is_in_state('s8_end'):
+                self.go_to_next_state()
 
 
             # Looping tasks------------------------------------------------------------------------
-
-            # Call method to check for user input to get execute_next_state
-            self.get_user_execution_command()
             rate.sleep()
 
 
