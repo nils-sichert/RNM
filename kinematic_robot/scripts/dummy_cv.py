@@ -166,7 +166,7 @@ class DummyCV:
         self.publish_needle_goal_pose(self.calculate_needle_goal_pose())
 
         # Signal finished calibration/registrtation to start 
-        self.pub_task_finished()
+        self.publish_task_finished()
 
 
 if __name__ == '__main__':
