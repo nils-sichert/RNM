@@ -28,7 +28,7 @@ class MotionManager:
         self.kinematics         = robot_kinematics()
         self.path_planner       = path_planner(self.kinematics)
         self.trajectory_planner = trajectory_planner_simple(self.kinematics)
-        self.motion_executor    = MotionExecutor(joint_command_topic, self.kinematics)
+        self.motion_executor    = MotionExecutor(joint_command_topic, self.kinematics, joint_state_topic="/joint_states")
 
         # File-Names
          ## Path
@@ -59,7 +59,7 @@ class MotionManager:
 
         # Load Parameter
 
-        self.max_dist_between_supports = rospy.get_param("~max_dist_between_supports", 0.01)
+        self.max_dist_between_supports = rospy.get_param("~max_dist_between_supports", 1)
 
         # Debug
         #rospy.logwarn("[MM] Current A:" + str(self.current_A))
@@ -79,27 +79,36 @@ class MotionManager:
         
         self.trajectory_planner.create_point_to_point_traj(self.current_joint_state, GoalPose, MOVEMENT_SPEED, self.filename_path_preinsertion_joint_space, self.filename_trajectory_preinsertion) 
         self.motion_executor.run(self.filename_trajectory_preinsertion, self.get_current_pose(), MOVEMENT_SPEED)
-        return
+        return True
 
     def move_start2preinsertion(self, needle_goal_pose, MOVEMENT_SPEED): #FIXME rename into curent2preinsection
-        self.path_planner.calculate_target_path(self.current_joint_state, needle_goal_pose, self.get_max_dist_between_waypoints(), self.filename_path_preinsertion_cartesian, self.filename_path_insertion_cartesian, self.filename_path_preinsertion_joint_space, self.filename_path_insertion_joint_space)
+        self.path_planner.calculate_path(self.current_joint_state, needle_goal_pose, self.get_max_dist_between_waypoints_preinsertion(), self.get_max_dist_between_waypoints_insertion(), self.filename_path_preinsertion_cartesian, self.filename_path_insertion_cartesian, self.filename_path_preinsertion_joint_space, self.filename_path_insertion_joint_space)
+        #TODO calcutlation intersectionpoint2target mit mehr waypoints
         self.trajectory_planner.create_simple_trajectory(self.filename_path_preinsertion_joint_space, self.filename_trajectory_preinsertion, MOVEMENT_SPEED) #FIXME Change for Cem trajectory planner
         self.motion_executor.run(self.filename_trajectory_preinsertion, self.get_current_pose(), MOVEMENT_SPEED)
         return True
 
     def move_preinsertion2target(self, MOVEMENT_SPEED):
+        
         self.trajectory_planner.create_simple_trajectory(self.filename_path_insertion_joint_space, self.filename_trajectory_insertion, MOVEMENT_SPEED)
         self.motion_executor.run(self.filename_trajectory_insertion, self.get_current_pose(), MOVEMENT_SPEED)
         return True
 
-    def move_target2init_pose(self):
+    def move_target2init_pose(self, MOVEMENT_SPEED): # TODO need to be debugged!
         self.motion_executor.run_reversed(self.filename_path_insertion_joint_space, self.get_current_pose(), MOVEMENT_SPEED)
         self.motion_executor.run_reversed(self.filename_trajectory_insertion, self.get_current_pose(), MOVEMENT_SPEED)
         return True
 
-    def get_max_dist_between_waypoints(self):
+    def get_max_dist_between_waypoints_preinsertion(self):
         # maximum distance between each waypoint (|x/y/z|), no rotation is taken into account
-        max_dist_between_supports = rospy.get_param("~max_dist_between_supports", 0.01)
+        # TODO 
+        max_dist_between_supports = rospy.get_param("~max_dist_between_supports_preinsertion", 1)
+        return max_dist_between_supports
+    
+    def get_max_dist_between_waypoints_insertion(self):
+        # maximum distance between each waypoint (|x/y/z|), no rotation is taken into account
+        # TODO 
+        max_dist_between_supports = rospy.get_param("~max_dist_between_supports_insertion", 0.01)
         return max_dist_between_supports
     
     def get_current_pose(self):
@@ -121,4 +130,3 @@ if __name__ == '__main__':
     motion_manager.move_start2preinsertion(needle_goal_pose, MOVEMENT_SPEED)
         
     motion_manager.move_preinsertion2target(MOVEMENT_SPEED)
-        

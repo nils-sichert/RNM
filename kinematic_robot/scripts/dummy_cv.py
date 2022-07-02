@@ -17,7 +17,7 @@ class DummyCV:
         rospy.logwarn('[dCV] Init started...')
         
         # ROS Subscriber
-        self.sub.task_command       = rospy.Subscriber('/task_command', String, self.callback_task_command)
+        self.sub_task_command       = rospy.Subscriber('/task_command', String, self.callback_task_command)
         self.sub_goal_pose_reached  = rospy.Subscriber('/goal_pose_reached', Int16, self.callback_goal_pose_reached)
         self.sub_user_input_dummy   = rospy.Subscriber('/user_input_dummy', String, self.callback_user_input_dummy)
 
@@ -33,10 +33,13 @@ class DummyCV:
         # Task control
         self.start_task     = False                         # Signals to start the task, is set from callback_task_command
         self.TASKCMD        = "camera_calibration_start"    # message to start task /TODO replace with appropriate value
-        self.TASKFIN        = "camera_calibration_finished" # message send to signal task finished /TODO replace with appropriate value
-                                            
+        
+        # message send to signal task finished /TODO replace with appropriate value
+        self.TASKFIN_camera_calibration     = "camera_calibration_finished"   
+        self.TASKFIN_handeye_calibration    = "handeye_calibration_finished"                  
+        self.TASKFIN_model_registration     = "model_registration_finished"                                   
         # Misc
-        self.joint_state_topic      = rospy.get_param('joint_state_topic')
+        self.joint_state_topic      = rospy.get_param('joint_state_topic', "/joint_states")
         self.pose_list_dir          = pose_list_dir
         self.pose_list              = np.load(os.path.join(os.path.dirname(__file__), pose_list_dir))
         self.curr_pose_id           = 0
@@ -94,8 +97,7 @@ class DummyCV:
         msg.data    = pose
 
         self.pub_needle_goal_pose.publish(msg)
-        return
-
+        
     # Getter methods
     def get_curr_joint_state(self):
         ''' Get actual current joint states
@@ -117,8 +119,11 @@ class DummyCV:
             pass
         time.sleep(2)
 
-    def publish_task_finished(self):
-        self.pub_task_finished.publish(self.TASKFIN)
+    def publish_task_finished(self, task):
+        msg = String()
+        msg.data = task
+        self.pub_task_finished.publish(msg)
+        return
 
     # Dummy methods to simulate CV processes
     def important_stuff(self):
@@ -166,7 +171,7 @@ class DummyCV:
         self.publish_needle_goal_pose(self.calculate_needle_goal_pose())
 
         # Signal finished calibration/registrtation to start 
-        self.publish_task_finished()
+        self.publish_task_finished(self.TASKFIN_camera_calibration) #TODO finish Publisher has to be implemented
 
 
 if __name__ == '__main__':

@@ -7,7 +7,11 @@ from motion_manager import MotionManager
 import time
 import numpy as np
 
-# TODO State 4 need to be implemented
+# TODO State 2-4 need to be implemented and/ or flags corrected/ controlled
+# TODO State 7 need to be debugged (MM and ME)
+# TODO State 1 need other exit condition
+# TODO Start of Dummy CV need other condition
+# Teststatus: changing states not testet (exept setting execution command = True)
 
 class ProcessManager:
 
@@ -34,6 +38,7 @@ class ProcessManager:
                             's2_camera_calibration',    # Exit when CC finished -> camera calibrated, result file on disk
                             's3_handeye_calibration',   # Exit when HC finished -> handeye calibrated, result file on disk
                             's4_model_registration',    # Exit when MR finished -> target acquired, target pose on disk
+                            's5_move2initial_pose',       # Exit when robot at intal pose, to change tool 
                             's5_pre_insertion',         # Exit when robot at pre insertion pose
                             's6_insertion',             # Exit when robot at insertion pose
                             's7_post_insertion',        # Exit when robot at post insertion pose (reverse to pre insertion pose)
@@ -42,7 +47,7 @@ class ProcessManager:
 
         self.curr_state = 's0_start'            # Current state
         self.user_execution_command = False     # Confirm next state with user_execution_command
-        self.user_next_state        = None      # Ovrride next state with user_next_state
+        self.user_next_state        = 'None'    # Ovrride next state with user_next_state
 
         self.first_run_in_state     = False     # Set to true when state transition in go_to_next_state
                                                 # set to false after first run in state in is_first_run_in_state
@@ -64,33 +69,33 @@ class ProcessManager:
 
         # Flags for signalling CV processes
         self.CC_finished    = False
-        self.HEC_finished   = False
-        self.MR_finished    = False
-
-        # Objects----------------------------------------------------------------------------------
-        self.motion_manager     = MotionManager(self.joint_command_topic, self.joint_state_topic)
-
+        self.HEC_finished   = True #FIXME change back to False
+        self.MR_finished    = True #FIXME change back to False
+        
         # ROS inits--------------------------------------------------------------------------------
         rospy.init_node('process_manager', anonymous=True)
         rospy.logwarn('[PM] Init started...')
 
         # Load ROS Parameter
-        self.joint_state_topic  = rospy.get_param('/joint_state_topic')
-        self.joint_command_topic= rospy.get_param('/joint_command_topic')
+        self.joint_state_topic  = rospy.get_param('/joint_state_topic', "/joint_states")
+        self.joint_command_topic= rospy.get_param('/joint_command_topic', "/joint_position_example_controller_sim/joint_command")
         self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.1)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
         self.INIT_POSE          = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])
              
         # ROS Helper/ Debuging
         self.user_execution_command = rospy.set_param('/user_execution_command', False)
 
-        # ROS Subscriber
-        self.sub_needle_goal_pose   = rospy.Subscriber('/needle_goal_pose', Float64MultiArray, self.callback_needle_goal_pose)
-        self.sub_goal_pose_js       = rospy.Subscriber('/goal_pose_js', Float64MultiArray, self.callback_goal_pose_js )
-        self.sub_task_finished      = rospy.Subscriber('/task_finished', Float64MultiArray, self.callback_goal_pose_js )
-
         # ROS Publisher (do this last to signal that PM node is ready)
         self.pub_task_command       = rospy.Publisher('/task_command', String, queue_size=1)      
         self.pub_goal_pose_reached  = rospy.Publisher('/goal_pose_reached', Int16, queue_size=1)
+
+        # ROS Subscriber
+        self.sub_needle_goal_pose   = rospy.Subscriber('/needle_goal_pose', Float64MultiArray, self.callback_needle_goal_pose)
+        self.sub_goal_pose_js       = rospy.Subscriber('/goal_pose_js', Float64MultiArray, self.callback_goal_pose_js )
+        self.sub_task_finished      = rospy.Subscriber('/task_finished', String, self.callback_task_finished )
+
+        # Objects----------------------------------------------------------------------------------
+        self.motion_manager     = MotionManager(self.joint_command_topic, self.joint_state_topic)
 
         time.sleep(1)
         rospy.logwarn('[PM] Init finished')
@@ -260,7 +265,7 @@ class ProcessManager:
             
             # S1 Wait for CV-----------------------------------------------------------------------
             # Wait until CV nodes are ready (non blocking)
-            # /TODO this is currently done by only checking if /goal_pose_js topic is published
+            # /TODO this is currently done by only checking if /goal_pose_js topic is published, change
             # /TODO this is not sufficient to test if ALL CV nodes are ready
             if self.is_in_state('s1_wait_for_cv'):
 
@@ -324,11 +329,20 @@ class ProcessManager:
                     rospy.logwarn("[PM] Model registration finished")
                     self.go_to_next_state()
 
+            # S5 Move to inital pose---------------------------------------------------------------
+            # Move robot to initial pose then 
+            if self.is_in_state('s5_move2initial_pose'):
+                motion_done = self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
+                
+                # Exit state - when robot at pre insertion pose
+                if motion_done:
+                    rospy.logwarn("[PM] Successfully completed movement to pre-insertion point")
+                    self.go_to_next_state()
 
-            # S5 Move to pre-insertion pose--------------------------------------------------------
-            # First move robot to initial pose then move robot to pre-insertion pose (blocking)
+
+            # S6 Move to pre-insertion pose--------------------------------------------------------
+            # Move robot to pre-insertion pose (blocking)
             if self.is_in_state('s5_pre_insertion'):
-                self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
                 motion_done = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
                 
                 # Exit state - when robot at pre insertion pose
@@ -337,7 +351,7 @@ class ProcessManager:
                     self.go_to_next_state()
 
 
-            # S6 Execute insertion-----------------------------------------------------------------
+            # S7 Execute insertion-----------------------------------------------------------------
             # Insert needle to target, exit when at pose (blocking)
             if self.is_in_state('s6_insertion'):
                 motion_done = self.motion_manager.move_preinsertion2target(self.MOVEMENT_SPEED)                     
@@ -348,11 +362,11 @@ class ProcessManager:
                     self.go_to_next_state()
 
 
-            # S7 Post insertion--------------------------------------------------------------------
+            # S8 Post insertion--------------------------------------------------------------------
             # Reverse needle insertion, exit when at pose (blocking)
             # /TODO replace motion function with correct "reverse needle" function
             if self.is_in_state('s7_post_insertion'):
-                self.motion_manager.move_target2init_pose() # /FIXME Add function
+                self.motion_manager.move_target2init_pose(self.MOVEMENT_SPEED) # /FIXME Add function
                 motion_done = True                          # /FIXME Get result from motion function
 
                 # Exit state - when robot at post insertion pose
@@ -361,7 +375,7 @@ class ProcessManager:
                     self.go_to_next_state()
 
 
-            # S8 End state-------------------------------------------------------------------------
+            # S9 End state-------------------------------------------------------------------------
             # Do end tasks, finish state and await new user commands (non blocking)
             if self.is_in_state('s8_end'):
                 self.go_to_next_state()

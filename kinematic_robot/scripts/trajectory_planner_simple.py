@@ -86,7 +86,6 @@ class trajectory_planner_simple:
                 for j in range(steps + 1):
                     sample_joint = current_joint + j * delta_joints_per_step
                     writer.writerow(sample_joint)
-                writer.writerow(joint_list[-1])
            
         
         rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')

@@ -12,18 +12,18 @@ class path_planner:
         self.robot_kinematics = robot_kinematics
         self.last_joint = []
        
-    def calculate_target_path(self, current_joint_state, goal_pose, max_dist_between_waypoints, filename_path_preinsertion_cartesian, filename_path_insertion_cartesian, filename_path_preinsertion_joint_space, filename_path_insertion_joint_space):
+    def calculate_path(self, current_joint_state, goal_pose, max_dist_between_waypoints_preinsertion, max_dist_between_waypoints_insertion, filename_path_preinsertion_cartesian, filename_path_insertion_cartesian, filename_path_preinsertion_joint_space, filename_path_insertion_joint_space):
         #TODO if/else! 
         current_pose = self.robot_kinematics.get_pose_from_angles(current_joint_state)
         intersection_pose = self.calculate_intersection(goal_pose)
         
         self.clean_path_list_cartesian(filename_path_preinsertion_cartesian, current_pose, intersection_pose)
         path_list_preinsertion = self.get_path_list_cartesian(filename_path_preinsertion_cartesian) #FIXME Redundency !
-        self.calculate_path_list_jointspace(current_joint_state, goal_pose, max_dist_between_waypoints, path_list_preinsertion, filename_path_preinsertion_joint_space)
+        self.calculate_path_list_jointspace(current_joint_state, max_dist_between_waypoints_preinsertion, path_list_preinsertion, filename_path_preinsertion_joint_space)
 
         self.clean_path_list_cartesian(filename_path_insertion_cartesian, self.robot_kinematics.get_pose_from_angles(self.last_joint), goal_pose)
         path_list_insertion = self.get_path_list_cartesian(filename_path_insertion_cartesian)
-        self.calculate_path_list_jointspace(self.last_joint, goal_pose, max_dist_between_waypoints, path_list_insertion, filename_path_insertion_joint_space)
+        self.calculate_path_list_jointspace(self.last_joint, max_dist_between_waypoints_insertion, path_list_insertion, filename_path_insertion_joint_space)
 
     def clean_path_list_cartesian(self, filename, start_pose, goal_pose):
         # TODO add IF load path do NOT execute this method else if calculate new path execute this before loading path list cartesian
@@ -72,7 +72,7 @@ class path_planner:
         
         return A_intersection
 
-    def calculate_path_list_jointspace(self, current_joint_state, goal_pose, max_dist_between_waypoints, input_path, output_filename):
+    def calculate_path_list_jointspace(self, current_joint_state, max_dist_between_waypoints, input_path, output_filename):
         """
         method, that interpolates Joint Space into 1ms Step
         number of steps need to be calculated, e.g. calculating stepwidth with get_A and divide by max. movement per 1ms
@@ -87,7 +87,7 @@ class path_planner:
             counter = int((tmp_dist// max_dist_between_waypoints)+1)
 
         # intepolate between given waypoints with given max. distance between interpolated waypoints   
-            for i in range(counter):
+            for i in range(counter+1):
                 interpol_pose = current_pose + i/counter*delta_pose
                 tmp_A_list.append(interpol_pose)
             
@@ -99,14 +99,14 @@ class path_planner:
 
         current_theta = current_joint_state
         # calculate joint space for each A and write it into file
-        for i in tqdm(range(len(tmp_A_list)-1), ncols=100 ):
-            
+        for i in tqdm(range(len(tmp_A_list)), ncols=100 ):
+            goal_pose = tmp_A_list [i]
+            current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,goal_pose)
             with open((os.path.join(os.path.dirname(__file__),output_filename)), mode="a", newline="") as f:
                 writer = csv.writer(f, delimiter=",")
                 writer.writerow(current_theta)
 
-            goal_pose = tmp_A_list [i+1]
-            current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,goal_pose)
+            
         rospy.logwarn("[PP] Got path joint space.")
         self.last_joint = current_theta
 
@@ -133,4 +133,3 @@ if __name__ == '__main__':
     filename_path_insertion_joint_space     = "Path/calculated_path_insertion_jointspace.csv"
   
     path_planner.calculate_target_path(current_joint_state, goal_pose, max_dist_between_waypoints, filename_path_preinsertion_cartesian, filename_path_insertion_cartesian, filename_path_preinsertion_joint_space, filename_path_insertion_joint_space)
-
