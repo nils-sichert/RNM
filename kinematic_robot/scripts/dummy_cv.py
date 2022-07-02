@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
+import queue
 import numpy as np
 import time
 import os
 import rospy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
-from std_msgs.msg import Bool
 from std_msgs.msg import String
 from std_msgs.msg import Int16
 
@@ -17,10 +17,12 @@ class DummyCV:
         rospy.logwarn('[dCV] Init started...')
         
         # ROS Subscriber
+        self.sub.task_command       = rospy.Subscriber('/task_command', String, self.callback_task_command)
         self.sub_goal_pose_reached  = rospy.Subscriber('/goal_pose_reached', Int16, self.callback_goal_pose_reached)
         self.sub_user_input_dummy   = rospy.Subscriber('/user_input_dummy', String, self.callback_user_input_dummy)
 
         # ROS Publisher (do last to signal node ready)
+        self.pub_task_finished      = rospy.Publisher('/task_finished', String, queue_size=1)
         self.pub_goal_pose_js       = rospy.Publisher('/goal_pose_js', Float64MultiArray, queue_size=1)
         self.pub_needle_goal_pose   = rospy.Publisher('/needle_goal_pose', Float64MultiArray, queue_size=1)
 
@@ -28,6 +30,11 @@ class DummyCV:
         self.at_desired_goal_pose   = False
         self.go_to_next_pose        = False
 
+        # Task control
+        self.start_task     = False                         # Signals to start the task, is set from callback_task_command
+        self.TASKCMD        = "camera_calibration_start"    # message to start task /TODO replace with appropriate value
+        self.TASKFIN        = "camera_calibration_finished" # message send to signal task finished /TODO replace with appropriate value
+                                            
         # Misc
         self.joint_state_topic      = rospy.get_param('joint_state_topic')
         self.pose_list_dir          = pose_list_dir
@@ -37,6 +44,14 @@ class DummyCV:
         time.sleep(1)
         rospy.logwarn('[dCV] Init finished')
 
+    # Callback methods
+    def callback_task_command(self, msg : String):
+        ''' Listenes for task command and sets self.start_task '''
+
+        msg = msg.data
+        if msg == self.TASKCMD:
+            rospy.logwarn(f'[dCV] Received correct start command "{msg}"')
+            self.start_task = True
 
     def callback_user_input_dummy(self, msg):
         ''' This function simply simulates a delayed response from the program
@@ -54,6 +69,7 @@ class DummyCV:
         else:
             rospy.logwarn(f"[dCV] !ERR! Received incorrect confirmation ID {received_id}")
 
+    # Publish methods
     def publish_desired_goal_pose(self, pose_js : np.array, pose_id : int):
         ''' Publihes current desired goal pose and current pose id using the goal_pose_js_pub.
             Also sets the self.curr_pose_id to the id that is sent in the message.
@@ -80,6 +96,7 @@ class DummyCV:
         self.pub_needle_goal_pose.publish(msg)
         return
 
+    # Getter methods
     def get_curr_joint_state(self):
         ''' Get actual current joint states
         '''
@@ -87,6 +104,23 @@ class DummyCV:
         act_curr_pose   = np.array(act_curr_pose.position)
         return act_curr_pose
 
+    def is_topic_published(self, topic_name : str):
+        ''' Checks the rostopic list for the given topic 
+        '''
+        topics  = rospy.get_published_topics()
+        topics  = [topics[i][0] for i in range(len(topics))]
+        return (topic_name in topics)
+
+    # Task control
+    def wait_for_task_command(self):
+        while not self.start_task:
+            pass
+        time.sleep(2)
+
+    def publish_task_finished(self):
+        self.pub_task_finished.publish(self.TASKFIN)
+
+    # Dummy methods to simulate CV processes
     def important_stuff(self):
         ''' This function simulates important stuff which takes time
         '''
@@ -94,12 +128,11 @@ class DummyCV:
         time.sleep(delay)
         return
 
-    def is_topic_published(self, topic_name : str):
-        ''' Checks the rostopic list for the given topic 
-        '''
-        topics  = rospy.get_published_topics()
-        topics  = [topics[i][0] for i in range(len(topics))]
-        return (topic_name in topics)
+    def calculate_needle_goal_pose(self):
+        #FIXME actual needle goal pose calculation
+        needle_goal_pose  = np.array([ 0.70105746, -0.63595987 , 0.32260423 ,-0.71068701 ,-0.66031765,  0.24270266,  0.05867211, -0.39941914, -0.91488903 , 0.29202788,  0.14586335,  0.62162211])
+        
+        return needle_goal_pose
 
 
     def do_stuff_with_recorded_poses(self):
@@ -109,10 +142,8 @@ class DummyCV:
         self.go_to_next_pose = True
       
         # Wait until process_manager is ready
-        rospy.logwarn('[dCV] Waiting for PM...')
-        while not self.is_topic_published('/goal_pose_reached'): pass
-        rospy.logwarn('[dCV] Topics from PM detected')
-        time.sleep(2)
+        rospy.logwarn('[dCV] Waiting for PM task command...')
+        self.wait_for_task_command()
 
         # Loop over all desired waypoints
         for pose_id in range(2):
@@ -134,13 +165,9 @@ class DummyCV:
         # Do more important stuff
         self.publish_needle_goal_pose(self.calculate_needle_goal_pose())
 
-        # /TODO: Signal finished calibration/registrtation to start 
+        # Signal finished calibration/registrtation to start 
+        self.pub_task_finished()
 
-    def calculate_needle_goal_pose(self):
-        #FIXME actual needle goal pose calculation
-        needle_goal_pose  = np.array([ 0.70105746, -0.63595987 , 0.32260423 ,-0.71068701 ,-0.66031765,  0.24270266,  0.05867211, -0.39941914, -0.91488903 , 0.29202788,  0.14586335,  0.62162211])
-        
-        return needle_goal_pose
 
 if __name__ == '__main__':
     
