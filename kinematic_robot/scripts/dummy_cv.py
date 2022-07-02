@@ -29,7 +29,7 @@ class DummyCV:
         self.go_to_next_pose        = False
 
         # Misc
-        self.joint_state_topic      = rospy.get_param('joint_state_topic')
+        self.joint_state_topic      = rospy.get_param('joint_state_topic', "/joint_states")
         self.pose_list_dir          = pose_list_dir
         self.pose_list              = np.load(os.path.join(os.path.dirname(__file__), pose_list_dir))
         self.curr_pose_id           = 0

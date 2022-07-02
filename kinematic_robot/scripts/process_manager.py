@@ -36,8 +36,8 @@ class ProcessManager:
         rospy.logwarn('[PM] Init started...')
 
         # Load ROS Parameter
-        self.joint_state_topic  = rospy.get_param('/joint_state_topic')
-        self.joint_command_topic= rospy.get_param('/joint_command_topic')
+        self.joint_state_topic  = rospy.get_param('/joint_state_topic',"/joint_states")
+        self.joint_command_topic= rospy.get_param('/joint_command_topic',"/joint_position_example_controller_sim/joint_command")
         self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.1)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
         self.INIT_POSE          = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])
         
@@ -139,7 +139,7 @@ class ProcessManager:
 
             # State 1: Camera Calibration and Target Acquisition-----------------------------------
             if self.s1_cv_ready and self.user_execution_command:            
-                self.publish_task_command(self.taskcmd_camera_calibration)  # TODO: only publish once
+                #self.publish_task_command(self.taskcmd_camera_calibration)  # TODO: only publish once
                 
                 if not self.old_goal_pose_id == self.crr_goal_pose_id:
                     self.old_goal_pose_id = self.crr_goal_pose_id
@@ -191,7 +191,7 @@ class ProcessManager:
 
             # State 4: Reverse insertion------------------------------------------------------------
             if self.s4_reverse_active and self.user_execution_command:
-                self.motion_manager.move_target2init_pose()  #FIXME Add function
+                self.motion_manager.move_target2init_pose(self.MOVEMENT_SPEED)  #FIXME Add function
                 self.reset_user_execution_command()
                 rospy.logwarn("[PM] s4 -> s0 Successfully reversed robot to inital pose")
                 rospy.logwarn("[PM] Waiting for user execution command...")
