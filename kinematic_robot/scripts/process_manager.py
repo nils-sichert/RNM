@@ -15,6 +15,7 @@ class ProcessManager:
 
         # Task commands
         self.taskcmd_camera_calibration = "camera_calibration_start"
+        # TODO have more taskcmds for other CV nodes
 
         # Flags
         self.s0_reset               = True
@@ -23,13 +24,31 @@ class ProcessManager:
         self.s3_at_pre_insertion    = False
         self.s4_reverse_active      = False
 
-        self.user_execution_command = False
+        
         self.goal_pose_js_filename  = None
 
-        self.crr_goal_pose_id       = None
-        self.old_goal_pose_id       = None
+        self.crr_goal_pose_id   = None
+        self.old_goal_pose_id   = None
 
-        self.crr_task_command       = None
+        self.crr_task_command   = None
+
+        # Process flow
+        self.all_states = [ 's0_start',                 # Exit when PM is ready -> useful if next states should be skipped
+                            's1_wait_for_cv',           # Exit when CV nodes ready -> Ready flags set
+                            's2_camera_calibration',    # Exit when CC finished -> camera calibrated, result file on disk
+                            's3_handeye_calibration',   # Exit when HC finished -> handeye calibrated, result file on disk
+                            's4_model_registration',    # Exit when MR finished -> target acquired, target pose on disk
+                            's5_pre_insertion',         # Exit when robot at pre insertion pose
+                            's6_insertion',             # Exit when robot at insertion pose
+                            's7_post_insertion',        # Exit when robot at post insertion pose (reverse to pre insertion pose)
+                            's8_end',                   # Never exit unless user command
+                            'sX_wait_for_user'
+                            ]
+
+        self.curr_state = 's0_start'            # Current state
+        self.user_execution_command = False     # Confirm next state with user_execution_command
+        self.user_next_state        = None      # Ovrride next state with user_next_state
+
 
         # ROS inits
         rospy.init_node('process_manager', anonymous=True)
@@ -95,13 +114,21 @@ class ProcessManager:
 
     # Getter Methods
     def get_user_execution_command(self):
-        ''' /TODO
+        ''' Read user execution command from rosparam
         '''
         new_state = rospy.get_param('/user_execution_command', False)
         if not self.user_execution_command and new_state:
             rospy.logwarn("[PM] Received user execution command")
         self.user_execution_command = new_state
    
+    def get_user_next_state(self):
+        ''' Read user next state from rosparam
+        '''
+        new_user_next_state = rospy.get_param('/user_next_state', 'None')
+        if self.user_next_state == 'None' and not new_user_next_state == 'None':
+            rospy.logwarn(f"[PM] Received user next state: {new_user_next_state}")
+        self.user_next_state = new_user_next_state
+
     def is_topic_published(self, topic_name : str):
         ''' Checks the rostopic list for the given topic 
         '''
@@ -111,9 +138,60 @@ class ProcessManager:
 
     # Resetter Methods
     def reset_user_execution_command(self):
-        ''' /TODO
+        ''' Resets the user_execution_command
         '''
         self.user_execution_command = rospy.set_param('/user_execution_command', False)
+
+    def reset_user_next_state(self):
+        ''' Resets the user_next_state
+        '''
+        self.user_next_state = rospy.set_param('/user_next_state', 'None')
+
+    # Process flow control methods
+    def is_in_state(self, state_name : str):
+        ''' Returns bool if process_manager is in state_name state '''
+        return self.curr_state == state_name
+
+    def go_to_next_state(self):
+        ''' Reads curr_state and sets next_state according to all_states 
+            Then waits for user input to confirm next state or overrule
+        '''
+        
+        # Check if state is in all_states, get state index
+        curr_state  = self.curr_state
+        assert curr_state in self.all_states, 'curr_state not found in all_states'
+        state_idx   = self.all_states.index(curr_state)
+
+        # Set next state. Set to none, if last state has been reached
+        if state_idx == len(self.all_states) - 1:
+            rospy.logwarn("[PM] Reached end state, no next state specified")
+            next_state = None
+        else:
+            next_state  = self.all_states[state_idx + 1]
+
+        rospy.logwarn(f"[PM] curr_state = {self.curr_state} --> next_state = {next_state}")
+
+        # Wait for user confirmation or user specified state
+        rospy.logwarn("[PM] Waiting for user input...")
+        while True:
+            # Confirm next state selection with user_execution_command 
+            if self.user_execution_command:
+                self.reset_user_execution_command()
+                break
+
+            # Overrule next state selection with user_next_state command
+            if not self.user_next_state == 'None':
+                next_state = self.user_next_state
+                self.reset_user_next_state()
+                break
+
+            self.get_user_execution_command()
+            self.get_user_next_state()
+        
+        # Assign curr_state to next_state and continue PM
+        self.curr_state = next_state
+        rospy.logwarn(f'[PM] Go to state = {self.curr_state}')
+
 
 
     def main_process(self):
@@ -123,6 +201,22 @@ class ProcessManager:
         rate = rospy.Rate(1000)
         while not rospy.is_shutdown():
             # State transitions are triggered by outside flags and user inputs
+
+            # S0 Start-----------------------------------------------------------------------------
+            # Go directly to next state. This allows to do init process and accept user input at start
+            if self.is_in_state('s0_start'):
+                pass
+
+
+            # S0 Wait for CV-----------------------------------------------------------------------
+            if self.is_in_state('s0_wait_for_cv'):
+
+                if self.is_topic_published('/goal_pose_js'):
+                    self.s0_reset    = False
+                    self.s1_cv_ready = True
+                    self.reset_user_execution_command()
+                    rospy.logwarn("[PM] s0 -> s1 Topics from CV detected")
+                    rospy.logwarn("[PM] Waiting for user execution command...")
 
             # State 0: Reset state-----------------------------------------------------------------
             if self.s0_reset:
