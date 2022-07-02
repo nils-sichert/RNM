@@ -157,6 +157,14 @@ class ProcessManager:
         new_user_next_state = rospy.get_param('/user_next_state', 'None')
         if self.user_next_state == 'None' and not new_user_next_state == 'None':
             rospy.logwarn(f"[PM] Received user next state: {new_user_next_state}")
+
+            # Check if state is in all_states
+            if not new_user_next_state in self.all_states:
+                rospy.logwarn("User entered state not in all_states. All states are:")
+                for state in self.all_states:
+                    rospy.logwarn(f"{state}")
+                return
+
         self.user_next_state = new_user_next_state
 
     def is_topic_published(self, topic_name : str):
