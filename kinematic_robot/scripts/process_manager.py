@@ -28,9 +28,7 @@ class ProcessManager:
         self.crr_goal_pose_id   = None
         self.old_goal_pose_id   = None
 
-        self.crr_task_command   = None
-
-        # Internal process flow control
+        # Internal process flow control------------------------------------------------------------
         self.all_states = [ 's0_start',                 # Exit when PM is ready -> useful if next states should be skipped
                             's1_wait_for_cv',           # Exit when CV nodes ready -> Ready flags set
                             's2_camera_calibration',    # Exit when CC finished -> camera calibrated, result file on disk
@@ -49,14 +47,30 @@ class ProcessManager:
         self.first_run_in_state     = False     # Set to true when state transition in go_to_next_state
                                                 # set to false after first run in state in is_first_run_in_state
 
-        # Task commands
+        # Extenral process flow control------------------------------------------------------------
+
+        # Last send task command
+        self.crr_task_command   = None
+        
+        # Task commands (constant)
         self.TASKCMD_camera_calibration     = "camera_calibration_start"
         self.TASKCMD_handeye_calibration    = "handeye_calibration_start"
         self.TASKCMD_model_registration     = "model_registration_start"
+                                            
+        # Task finished messages (constant)
+        self.TASKFIN_camera_calibration     = "camera_calibration_finished"   
+        self.TASKFIN_handeye_calibration    = "handeye_calibration_finished"                  
+        self.TASKFIN_model_registration     = "model_registration_finished"
 
+        # Flags for signalling CV processes
+        self.CC_finished    = False
+        self.HEC_finished   = False
+        self.MR_finished    = False
 
+        # Objects----------------------------------------------------------------------------------
+        self.motion_manager     = MotionManager(self.joint_command_topic, self.joint_state_topic)
 
-        # ROS inits
+        # ROS inits--------------------------------------------------------------------------------
         rospy.init_node('process_manager', anonymous=True)
         rospy.logwarn('[PM] Init started...')
 
@@ -65,18 +79,16 @@ class ProcessManager:
         self.joint_command_topic= rospy.get_param('/joint_command_topic')
         self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.1)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
         self.INIT_POSE          = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])
-        
-        # Objects
-        self.motion_manager     = MotionManager(self.joint_command_topic, self.joint_state_topic)
-       
-        # Ros Helper/ Debuging
+             
+        # ROS Helper/ Debuging
         self.user_execution_command = rospy.set_param('/user_execution_command', False)
 
         # ROS Subscriber
         self.sub_needle_goal_pose   = rospy.Subscriber('/needle_goal_pose', Float64MultiArray, self.callback_needle_goal_pose)
         self.sub_goal_pose_js       = rospy.Subscriber('/goal_pose_js', Float64MultiArray, self.callback_goal_pose_js )
+        self.sub_task_finished      = rospy.Subscriber('/task_finished', Float64MultiArray, self.callback_goal_pose_js )
 
-        # ROS Publisher (do last to signal node ready)
+        # ROS Publisher (do this last to signal that PM node is ready)
         self.pub_task_command       = rospy.Publisher('/task_command', String, queue_size=1)      
         self.pub_goal_pose_reached  = rospy.Publisher('/goal_pose_reached', Int16, queue_size=1)
 
@@ -101,6 +113,18 @@ class ProcessManager:
         self.s2_target_acquired     = True
         self.needle_goal_pose = msg.data
     
+    def callback_task_finished(self, msg : String):
+        ''' Reads task_finished messeges and sets appropriate flags to True'''
+        msg     = msg.data
+        rospy.logwarn(f'[PM] Received task_finished message "{msg}"')
+        
+        if msg == self.TASKFIN_camera_calibration:
+            self.CC_finished = True
+        if msg == self.TASKFIN_handeye_calibration:
+            self.HEC_finished = True
+        if msg == self.TASKFIN_model_registration:
+            self.MR_finished = True
+
     # Publish Methods
     def publish_goal_pose_reached(self, goal_pose_id : int):
         ''' Publishes the confirmation ID of a reached goal pose
@@ -212,8 +236,6 @@ class ProcessManager:
         rospy.logwarn(f'[PM] Go to state = {self.curr_state}')
 
 
-
-
     def main_process(self):
 
         rospy.logwarn("[PM] Started main process")
@@ -229,7 +251,7 @@ class ProcessManager:
 
             
             # S1 Wait for CV-----------------------------------------------------------------------
-            # Wait until CV nodes are ready
+            # Wait until CV nodes are ready (non blocking)
             # /TODO this is currently done by only checking if /goal_pose_js topic is published
             # /TODO this is not sufficient to test if ALL CV nodes are ready
             if self.is_in_state('s1_wait_for_cv'):
@@ -240,8 +262,7 @@ class ProcessManager:
 
             
             # S2 Do camera calibration-------------------------------------------------------------
-            # Start camera calibration, go to goal poses, wait for CC results
-            # /TODO Finihsed CC checked by flag s2_target_ecquired. Change to "CC_finished" signal
+            # Start camera calibration, go to goal poses, wait for CC results (non blocking)
             if self.is_in_state('s2_camera_calibration'):
                 
                 if self.is_first_run_in_state():
@@ -250,19 +271,17 @@ class ProcessManager:
                 if not self.old_goal_pose_id == self.crr_goal_pose_id:
                     self.old_goal_pose_id = self.crr_goal_pose_id
                     self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)   
-                    self.publish_goal_pose_reached(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
+                    self.publish_goal_pose_reached(self.crr_goal_pose_id)
 
                 # Exit state - when camera is calibrated
-                CC_finished = self.s2_target_acquired   # /FIXME change to better CC_finished signal
-                if CC_finished:                         # Is True if VS has published needle goal pose
+                if self.CC_finished:
                     rospy.logwarn("[PM] Camera calibration finished")
                     #self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
                     self.go_to_next_state()
 
 
             # S3 Do Hand eye calibration-----------------------------------------------------------
-            # Start Hand eye calibration, go to goal poses, wait for HEC results
-            # /TODO Finihsed HEC checked by flag s2_target_ecquired. Change to "HEC_finished" signal
+            # Start Hand eye calibration, go to goal poses, wait for HEC results (non blocking)
             if self.is_in_state('s3_handeye_calibration'):
                 
                 if self.is_first_run_in_state():
@@ -271,19 +290,17 @@ class ProcessManager:
                 if not self.old_goal_pose_id == self.crr_goal_pose_id:
                     self.old_goal_pose_id = self.crr_goal_pose_id
                     self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)   
-                    self.publish_goal_pose_reached(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
+                    self.publish_goal_pose_reached(self.crr_goal_pose_id)
 
                 # Exit state - when hand eye is calibrated
-                HEC_finished = self.s2_target_acquired  # /FIXME change to better HEC_finished signal
-                if HEC_finished:                         # Is True if VS has published needle goal pose
+                if self.HEC_finished:
                     rospy.logwarn("[PM] Hand eye calibration finished")
                     #self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
                     self.go_to_next_state()
 
 
             # S4 Do Model registrtaion-------------------------------------------------------------
-            # Start model registrtation, go to goal poses, wait for MR results (target acquired)
-            # /TODO Finihsed MR checked by flag s2_target_ecquired. Change to "MR_finished" signal
+            # Start model registrtation, go to goal poses, wait for MR results / target acquired (non blocking)
             if self.is_in_state('s4_model_registration'):
                 
                 if self.is_first_run_in_state():
@@ -292,17 +309,16 @@ class ProcessManager:
                 if not self.old_goal_pose_id == self.crr_goal_pose_id:
                     self.old_goal_pose_id = self.crr_goal_pose_id
                     self.motion_manager.move2goal_js(self.goal_pose_js, self.MOVEMENT_SPEED)   
-                    self.publish_goal_pose_reached(self.crr_goal_pose_id)                   #FIXME Package int in int16 type
+                    self.publish_goal_pose_reached(self.crr_goal_pose_id)
 
                 # Exit state - when model registrtation is done and target is acquired
-                MR_finished = self.s2_target_acquired   # /FIXME change to better MR_finished signal
-                if MR_finished:                         # Is True if VS has published needle goal pose
+                if self.MR_finished:
                     rospy.logwarn("[PM] Model registration finished")
                     self.go_to_next_state()
 
 
             # S5 Move to pre-insertion pose--------------------------------------------------------
-            # First move robot to initial pose then move robot to pre-insertion pose
+            # First move robot to initial pose then move robot to pre-insertion pose (blocking)
             if self.is_in_state('s5_pre_insertion'):
                 self.motion_manager.move2goal_js(self.INIT_POSE, self.MOVEMENT_SPEED)
                 motion_done = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
@@ -314,7 +330,7 @@ class ProcessManager:
 
 
             # S6 Execute insertion-----------------------------------------------------------------
-            # Insert needle to target, exit when at pose
+            # Insert needle to target, exit when at pose (blocking)
             if self.is_in_state('s6_insertion'):
                 motion_done = self.motion_manager.move_preinsertion2target(self.MOVEMENT_SPEED)                     
 
@@ -325,7 +341,7 @@ class ProcessManager:
 
 
             # S7 Post insertion--------------------------------------------------------------------
-            # Reverse needle insertion, exit when at pose
+            # Reverse needle insertion, exit when at pose (blocking)
             # /TODO replace motion function with correct "reverse needle" function
             if self.is_in_state('s7_post_insertion'):
                 self.motion_manager.move_target2init_pose() # /FIXME Add function
@@ -338,6 +354,7 @@ class ProcessManager:
 
 
             # S8 End state-------------------------------------------------------------------------
+            # Do end tasks, finish state and await new user commands (non blocking)
             if self.is_in_state('s8_end'):
                 self.go_to_next_state()
 
