@@ -98,25 +98,43 @@ class MotionExecutor:
         rate    = rospy.Rate(1000)
 
         rospy.logwarn("[ME] Start publishing joints.")
+        current_joint = self.current_joint_state
         for i in range(len(list)):
             
-            joint = list[i]
-            list_speed_control = self.controller_joint_speed(joint)
-
-            for i in range(len(list_speed_control)-1):
-                msg = Float64MultiArray()
-                msg.data = list_speed_control[i+1]
-                self.pub_joint_state.publish(msg)
-                pose_reached = self.control_movement_err(list_speed_control[i])
-                while pose_reached: #FIXME change to not reached
+            next_joint = list[i]
+            msg = Float64MultiArray()
+            msg.data = list[i]
+            self.pub_joint_state.publish(msg)
+            pose_reached = self.control_movement_err(list[i])
+            while not pose_reached: 
                     if pose_reached:
                         break
+                    else:
+                        self.pub_joint_state.publish(msg)
+                        pose_reached = self.control_movement_err(list[i])
+                        rate.sleep()
+                    
+            rate.sleep()       
+
+        """
+            list_speed_control = self.control_joint_speed(current_joint, next_joint)
+
+            for i in range(len(list_speed_control)):
+                msg = Float64MultiArray()
+                msg.data = list_speed_control[i]
+                self.pub_joint_state.publish(msg)
+                pose_reached = self.control_movement_err(list_speed_control[i])
+                while not pose_reached: 
+                    if pose_reached:
+                        break
+                    self.pub_joint_state.publish(msg)
                     pose_reached = self.control_movement_err(list_speed_control[i])
-            rate.sleep()
-        
+                
+            current_joint = next_joint
+        """
         rospy.logwarn("[ME] Published all Joints.")
     
-    def control_movement_err(self, goal_pose, max_err=1e-4):
+    def control_movement_err(self, goal_pose, max_err=1e-3):
         diff = np.array(goal_pose)-np.array(self.current_joint_state)
         err = np.abs(diff).max() 
         if err >= max_err:
@@ -125,18 +143,23 @@ class MotionExecutor:
         else:
             return True
     
-    def controller_joint_speed(self, goal_pose):
-        curr_pose = self.current_joint_state
+    def control_joint_speed(self, current_pose, goal_pose):
         limits = np.array([2.175, 2.175, 2.175, 2.175, 2.61, 2.61, 2.61])*1e-3 # max rad/s for sampling of 1000Hz
-        diff = np.absolute(np.array(goal_pose)-np.array(curr_pose))
+        diff = np.absolute(np.array(goal_pose)-np.array(current_pose))
         list_speed_control = []
         if any(diff > limits):
+
+            rospy.logwarn("[ME] reached limits. Diff:" + str(diff))
+            list_speed_control.append(goal_pose)
+            """
             max_deviation = np.abs(diff-limits).max()
-            steps = int(max_deviation/(np.amin(limits)*1e-3)+1)
-            delta_joints_per_step = (np.array(goal_pose) - np.array(curr_pose)) / steps
+            steps = int(max_deviation/(np.amin(limits))+1)
+            delta_joints_per_step = (np.array(goal_pose) - np.array(current_pose)) / steps
             for j in range(steps + 1):
-                    sample_joint = curr_pose + j * delta_joints_per_step
+                    sample_joint = current_pose + j * delta_joints_per_step
                     list_speed_control.append(sample_joint)
+            rospy.logwarn("[ME] new list:" + str(list_speed_control))
+            """
         else:
             list_speed_control.append(goal_pose)
         return list_speed_control

@@ -112,9 +112,9 @@ class DummyCV:
         while not self.is_topic_published('/goal_pose_reached'): pass
         rospy.logwarn('[dCV] Topics from PM detected')
         time.sleep(2)
-
+        """
         # Loop over all desired waypoints
-        for pose_id in range(2):
+        for pose_id in range(0):
             pose = self.pose_list[pose_id]
             # Send next desired goal pose
             self.at_desired_goal_pose   = False
@@ -128,7 +128,7 @@ class DummyCV:
             # Do something important
             #act_curr_pose = self.get_curr_joint_state()
             self.important_stuff()
-
+        """
         
         # Do more important stuff
         self.publish_needle_goal_pose(self.calculate_needle_goal_pose())
