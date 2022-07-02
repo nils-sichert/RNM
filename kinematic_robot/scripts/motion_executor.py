@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import re
 import rospy
 import os
 from std_msgs.msg import Float64MultiArray
@@ -6,14 +7,21 @@ import csv
 import sys
 import numpy as np
 import time
+from sensor_msgs.msg import JointState
 
 class MotionExecutor:
-    def __init__(self, command_topic, robot_kinematics):
+    def __init__(self, command_topic, robot_kinematics, joint_state_topic):
         
-    
         self.pub_joint_state    = rospy.Publisher(command_topic, Float64MultiArray, queue_size=1)
         self.robot_kinematics   = robot_kinematics
         self.publish_list       = []
+        self.current_joint_state = [0,0,0,0,0,0,0]
+        self.current_joint_state_sub    = rospy.Subscriber(joint_state_topic, JointState, self.callback_joint_states)
+    
+    def callback_joint_states(self, msg):
+        ''' Callback function for the topic_joint_states. Stores current angles in object variable'''
+        self.current_joint_state = msg.position
+        return
 
     def run(self, filename, current_pose, MOVEMENT_SPEED):
         time.sleep(1) #FIXME time or rostime
@@ -93,14 +101,50 @@ class MotionExecutor:
         for i in range(len(list)):
             
             joint = list[i]
-            msg = Float64MultiArray()
-            msg.data = joint
-            self.pub_joint_state.publish(msg)
+            list_speed_control = self.controller_joint_speed(joint)
+
+            for i in range(len(list_speed_control)-1):
+                msg = Float64MultiArray()
+                msg.data = list_speed_control[i+1]
+                self.pub_joint_state.publish(msg)
+                pose_reached = self.control_movement_err(list_speed_control[i])
+                while pose_reached: #FIXME change to not reached
+                    if pose_reached:
+                        break
+                    pose_reached = self.control_movement_err(list_speed_control[i])
             rate.sleep()
         
         rospy.logwarn("[ME] Published all Joints.")
-        
-        
+    
+    def control_movement_err(self, goal_pose, max_err=1e-4):
+        diff = np.array(goal_pose)-np.array(self.current_joint_state)
+        err = np.abs(diff).max() 
+        if err >= max_err:
+            rospy.logwarn("[ME] Can not follow published joint. Wait for robot to reach joint.")
+            return False
+        else:
+            return True
+    
+    def controller_joint_speed(self, goal_pose):
+        curr_pose = self.current_joint_state
+        limits = np.array([2.175, 2.175, 2.175, 2.175, 2.61, 2.61, 2.61])*1e-3 # max rad/s for sampling of 1000Hz
+        diff = np.absolute(np.array(goal_pose)-np.array(curr_pose))
+        list_speed_control = []
+        if any(diff > limits):
+            max_deviation = np.abs(diff-limits).max()
+            steps = int(max_deviation/(np.amin(limits)*1e-3)+1)
+            delta_joints_per_step = (np.array(goal_pose) - np.array(curr_pose)) / steps
+            for j in range(steps + 1):
+                    sample_joint = curr_pose + j * delta_joints_per_step
+                    list_speed_control.append(sample_joint)
+        else:
+            list_speed_control.append(goal_pose)
+        return list_speed_control
+
+
+    def slow_start_controller(self):
+        pass
+                    
 # for testing purpose
 def main(argv):
     rospy.init_node("variable_publisher")

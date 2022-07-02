@@ -68,7 +68,6 @@ class DummyCV:
         msg.data    = pose_js
 
         self.pub_goal_pose_js.publish(msg)
-        self.pub_goal_pose_js.publish(msg)
 
         rospy.logwarn(f"[dCV] Send new goal_pose_js with ID {pose_id}")
 

@@ -28,7 +28,7 @@ class MotionManager:
         self.kinematics         = robot_kinematics()
         self.path_planner       = path_planner(self.kinematics)
         self.trajectory_planner = trajectory_planner_simple(self.kinematics)
-        self.motion_executor    = MotionExecutor(joint_command_topic, self.kinematics)
+        self.motion_executor    = MotionExecutor(joint_command_topic, self.kinematics, joint_state_topic="/joint_states")
 
         # File-Names
          ## Path
