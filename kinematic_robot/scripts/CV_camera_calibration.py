@@ -25,6 +25,7 @@ class CameraCalibration():
         # Task command to start CC
         self.task_start_flag    = False
         self.task_start_command = "camera_calibration_start"
+        self.task_finished_command = "camera_calibration_finished"
         # Set To False If Calibration Shouldn't Be Visible In Window Frame
         self.visualize_calibration_process = True
         # Path For Calibration Results
@@ -85,6 +86,7 @@ class CameraCalibration():
         self.sub_joint_state        = rospy.Subscriber(self.joint_state_topic, JointState, self.joint_state_callback)
         self.sub_goal_pose_reached  = rospy.Subscriber("/goal_pose_reached", Int16, self.callback_goal_pose_reached)
         self.sub_task_command       = rospy.Subscriber('/task_command', String, self.callback_task_command)
+        self.pub_task_finished       = rospy.Publisher('/task_finished', String, queue_size=1)
 
         self.pub_goal_pose_js       = rospy.Publisher("/goal_pose_js", Float64MultiArray, queue_size=1)
         rospy.logwarn("[CC] Waiting for image topics...")
@@ -280,10 +282,13 @@ class CameraCalibration():
                 if self.joint_list_pos < len(joint_list):
                     self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
          
+         
+        # Start Main Calibration with collected data
         self.rgb_ir_calibration()
 
+        # Give Feedback to PM
+        self.pub_task_finished.publish(self.task_finished_command)
         rospy.logwarn('[CC] Main process finished')
-
 
     def cleanup(self):
         rospy.logwarn("[CC] Shutting down vision node.")
