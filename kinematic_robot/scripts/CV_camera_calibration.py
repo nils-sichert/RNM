@@ -252,6 +252,7 @@ class CameraCalibration():
 
         rospy.logwarn('[CC] Starting main calibration...')
 
+
         # Load Joint List For Goal Positions
         joint_list = np.load(self.joint_list_path)
         print("Len(joint_list)")
