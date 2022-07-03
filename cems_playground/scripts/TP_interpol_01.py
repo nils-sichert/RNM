@@ -7,6 +7,7 @@ import numpy as np
 import scipy.optimize
 from matplotlib.ticker import FormatStrFormatter
 from numpy.polynomial import Polynomial
+import math
 
 
 # CLASSES--------------------------------------------------
@@ -47,14 +48,17 @@ class TrajectorySegment:
                 x (List): x values in seconds
                 y (List): y values
         '''
-        start   = np.round(self.start_t, sig_dec)
-        end     = np.round(self.end_t, sig_dec)
-        x       = np.arange(start, end, step)
+        start   = math.ceil(self.start_t * 10**sig_dec) / 10**sig_dec
+        end     = math.floor(self.end_t * 10**sig_dec) / 10**sig_dec
+        x       = np.arange(start, end + step, step)
         poly    = Polynomial(self.poly_coef)
         y       = poly.deriv(derivative)(x - start)
 
+        x       = np.round(x, 8)
+
         return x, y
 
+        
 
 class Trajectory:
     ''' Stores trajectory for one joint. Trajectory segments must be registered
@@ -101,9 +105,20 @@ class Trajectory:
         self.time_list.append(segment.end_t)
 
     def get_all_segments(self, derivative=0, step=0.001, sig_dec=3):
-        ''' Stitches all available segments together and returns 
-            an x and y list for all segemnts and an array with all
-            time_offsets
+        ''' Stitches all available segments together and returns an x and y list for all segemnts
+            in the specified sampling resolution. Additionally returns an array with all 
+            time_offsets, positions and waypoint indicator
+            Parameters:
+                derivative (int): The desired derivative of the segments
+                step (float): Sampling step size for the trajectory
+                sig_dec (int): Significicant decimal for rounding operations
+            Returns:
+                x (List): All time values for sampled points
+                y (List): All position values for sampled points
+                (self.time_list, pos, is_wp) (Tuple)
+                    self.time_list (List): All time stamps for segments points
+                    pos (List): All positions for segment points
+                    is_wp (List): Bool to indicate waypoint (if false: control point)
         '''
         x       = []
         y       = []
@@ -128,7 +143,7 @@ class Trajectory:
 
         x, y, _ = self.get_all_segments()
 
-        last_t  = x[-1]
+        last_t  = self.time_list[-1]
         last_p  = y[-1]
 
         assert time_end >= last_t, 'padded end time needs to be >= unpadded end time'
@@ -643,6 +658,21 @@ class TrajectoryPlanner:
         
         return self.trajectories
 
+    def save_trajectories_to_file(self, file_output_name : str):
+        ''' Saves the stored trajectories to the specified file in 1ms steps. 
+            Overrides any existing file 
+        '''
+        times_t     = []
+        positions_t = []
+
+        for traj in self.trajectories:
+            x, y, _     = traj.get_all_segments(step=0.001, sig_dec=3)
+            times_t.append(x)
+            positions_t.append(y)
+            a = 1
+
+        a = 1
+
     # Main methods
     def get_trajectories(self, waypoints_t : np.array, velocities_t : np.array, alphas_t : np.array, debug=False):
         ''' Returns a trajectory object for given
@@ -1122,6 +1152,8 @@ class TrajectoryPlanner:
         max_time        = max(max_times)
         trajectories_p  = self.pad_all_trajectories_until_time(max_time + 1)
 
+        self.save_trajectories_to_file('test_traj_file.csv')
+
         a = 1
         
 
@@ -1154,9 +1186,11 @@ if __name__ == '__main__' and select == 4:
                 "p_jrk_max" : 6500.000 }
 
     waypoints   = get_list_from_csv('', "temp_point2point_path.csv")
+    wp1         = waypoints[0]
+    wp2         = waypoints[1]
 
     trajectory_planer = TrajectoryPlanner(limits, 7)
-    trajectory_planer.create_point_to_point_traj(waypoints[0], waypoints[1], 'test_create_p2p_traj.csv')
+    trajectory_planer.create_point_to_point_traj(wp1, wp2, 'test_create_p2p_traj.csv')
     trajectory_planer.plot_all_trajectories()
     a = 1
 
