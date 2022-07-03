@@ -33,7 +33,8 @@ class DummyCV:
         # Task control
         self.start_task     = False                         # Signals to start the task, is set from callback_task_command
         self.TASKCMD        = "camera_calibration_start"    # message to start task /TODO replace with appropriate value
-        
+        self.TASKFIN        = "camera_calibration_finished" 
+
         # message send to signal task finished /TODO replace with appropriate value
         self.TASKFIN_camera_calibration     = "camera_calibration_finished"   
         self.TASKFIN_handeye_calibration    = "handeye_calibration_finished"                  
@@ -119,9 +120,9 @@ class DummyCV:
             pass
         time.sleep(2)
 
-    def publish_task_finished(self, task):
+    def publish_task_finished(self):
         msg = String()
-        msg.data = task
+        msg.data = self.TASKFIN
         self.pub_task_finished.publish(msg)
         return
 
