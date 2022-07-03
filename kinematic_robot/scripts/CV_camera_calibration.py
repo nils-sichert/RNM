@@ -61,8 +61,7 @@ class CameraCalibration():
         self.R_gripper2base = [] # stores rotational matrix after get_pose_from_angles calculation
         self.t_gripper2base = [] # stores translation vector from get_pose_from_angles calcuclation
         self.current_joint_state = [] # stores current joint angle which can be access when frame is saved 
-        self.joint_list_pos = 0
-        self.at_desired_goal_pose = False
+
 
         # Setup Checkerboard Parameters
         self.criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)  # termination criteria
@@ -84,21 +83,24 @@ class CameraCalibration():
         self.sub_rgb_frame          = rospy.Subscriber(self.rgb_frame_topic, Image, self.rgb_image_callback)
         self.sub_ir_frame           = rospy.Subscriber(self.ir_frame_topic, Image, self.ir_image_callback)
         self.sub_joint_state        = rospy.Subscriber(self.joint_state_topic, JointState, self.joint_state_callback)
-        self.sub_goal_pose_reached  = rospy.Subscriber("/goal_pose_reached", Int16, self.callback_goal_pose_reached)
-        self.sub_task_command       = rospy.Subscriber('/task_command', String, self.callback_task_command)
-        self.pub_task_finished       = rospy.Publisher('/task_finished', String, queue_size=1)
 
+        # Task Control and PM communication
+        self.sub_goal_pose_reached  = rospy.Subscriber("/goal_pose_reached", Int16, self.callback_goal_pose_reached)
         self.pub_goal_pose_js       = rospy.Publisher("/goal_pose_js", Float64MultiArray, queue_size=1)
+        
+        self.sub_task_command       = rospy.Subscriber('/task_command', String, self.callback_task_command)
+        self.pub_task_finished      = rospy.Publisher('/task_finished', String, queue_size=1)
+        
+        self.start_task     = False                         # Signals to start the task, is set from callback_task_command
+        self.TASKCMD        = "camera_calibration_start"    # message to start task /TODO replace with appropriate value
+        self.TASKFIN        = "camera_calibration_finished" # message to signal finished task /TODO replace with appropriate value
+
+        self.at_desired_goal_pose = False
+        self.joint_list_pos = 0
+
         rospy.logwarn("[CC] Waiting for image topics...")
         time.sleep(1)
 
-
-    def callback_task_command(self, msg : String):
-        ''' /TODO Docstring'''
-        if msg.data == self.task_start_command:
-            self.task_start_flag = True
-        else:
-            self.task_start_flag = False
 
 
     def joint_state_callback(self, joint_state : JointState):
@@ -111,7 +113,6 @@ class CameraCalibration():
         except CvBridgeError:
             print ("error bridging ROS Image-Message to OpenCV Image")
     
-
     # Store Current IR Frame In Class Variable
     def ir_image_callback(self, ros_ir_img):
         try:
@@ -149,9 +150,6 @@ class CameraCalibration():
             self.draw_image_points("IR_Frame", self.current_ir_frame, self.corners_ir, self.ret_ir)
         
 
-
-
-
     def collect_calibration_data(self):
         """ Collects the data e.g image points, object, points, joint_angles etc. if robot is in desired goal
             position"""
@@ -178,33 +176,8 @@ class CameraCalibration():
             self.t_gripper2base.append(t_gtb)
 
             rospy.logwarn(f"[CC]Collected data for frame with ID: {self.joint_list_pos}")
-         
-
+      
     
-    def publish_desired_goal_pose(self, pose_js : np.array, pose_id : int):
-        ''' Publihes current desired goal pose and current pose id using the goal_pose_js_pub.
-            Also sets the self.curr_pose_id to the id that is sent in the message.
-            Parameters:
-                pose_js (List): Current goal pose in joint space
-                pose_id (int): Current goal pose ID
-        '''
-        pose_js = np.append(pose_js, pose_id)
-        msg         = Float64MultiArray()
-        msg.data    = pose_js
-
-        self.pub_goal_pose_js.publish(msg)
-       
-
-        rospy.logwarn(f"[CC] Send new goal_pose_js with ID {pose_id}")
-
-    def callback_goal_pose_reached(self, msg : Int16):
-        ''' Checks the received confirmation ID and sets at_desired_goal_pose flag accordingly
-        '''
-        received_id = msg.data
-        if received_id == self.joint_list_pos:
-            rospy.logwarn(f"[CC] Received correct confirmation ID {received_id}")
-            self.at_desired_goal_pose = True
-
     def rgb_ir_calibration(self):
         """ This function calibrates the rgb and ir camera:
             Saves all important parameters as .npy and write new yaml file for camera driver
@@ -239,6 +212,42 @@ class CameraCalibration():
         np.save(self.result_path + "/tvec_stereo.npy", self.tvec_stereo)
         rospy.logwarn(f"[CC] Saved calibration result in {self.result_path}")
 
+    # PM communication
+    def publish_desired_goal_pose(self, pose_js : np.array, pose_id : int):
+        ''' Publihes current desired goal pose and current pose id using the goal_pose_js_pub.
+            Also sets the self.curr_pose_id to the id that is sent in the message.
+            Parameters:
+                pose_js (List): Current goal pose in joint space
+                pose_id (int): Current goal pose ID
+        '''
+        pose_js = np.append(pose_js, pose_id)
+        msg         = Float64MultiArray()
+        msg.data    = pose_js
+
+        self.pub_goal_pose_js.publish(msg)
+       
+
+        rospy.logwarn(f"[CC] Send new goal_pose_js with ID {pose_id}")
+
+    def callback_goal_pose_reached(self, msg : Int16):
+        ''' Checks the received confirmation ID and sets at_desired_goal_pose flag accordingly
+        '''
+        received_id = msg.data
+        if received_id == self.joint_list_pos:
+            rospy.logwarn(f"[CC] Received correct confirmation ID {received_id}")
+            self.at_desired_goal_pose = True
+        else:
+            rospy.logwarn(f"[CC] !ERR! Received incorrect confirmation ID {received_id}")
+
+
+    # Task control
+    def callback_task_command(self, msg : String):
+        ''' Listenes for task command and sets self.start_task '''
+
+        msg = msg.data
+        if msg == self.TASKCMD:
+            rospy.logwarn(f'[dCV] Received correct start command "{msg}"')
+            self.start_task = True
 
     def is_topic_published(self, topic_name : str):
         ''' Checks the rostopic list for the given topic 
@@ -246,12 +255,22 @@ class CameraCalibration():
         topics  = rospy.get_published_topics()
         topics  = [topics[i][0] for i in range(len(topics))]
         return (topic_name in topics)
-    
+
+    def wait_for_task_command(self):
+        while not self.start_task:
+            pass
+        time.sleep(2)
+
+    def publish_task_finished(self):
+        msg = String()
+        msg.data = self.TASKFIN
+        self.pub_task_finished.publish(msg)
+        return
+
 
     def main_calibration(self):
 
         rospy.logwarn('[CC] Starting main calibration...')
-
 
         # Load Joint List For Goal Positions
         joint_list = np.load(self.joint_list_path)
@@ -259,12 +278,8 @@ class CameraCalibration():
         print(len(joint_list))
 
         # Wait until process_manager is ready
-        rospy.logwarn('[CC] Waiting for PM...')
-        while not self.is_topic_published('/goal_pose_reached'): pass
-        rospy.logwarn('[CC] Topics from PM detected, waiting for task_start_command')
-        while not self.task_start_flag: pass
-        rospy.logwarn('[CC] Received task_start_command')
-        time.sleep(2)
+        rospy.logwarn('[CC] Waiting for PM task command...')
+        self.wait_for_task_command()
 
         # Publish First Goal Position by giving Joint List (7 Angles) and Joint List Position (Out of All)
         self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
@@ -288,7 +303,7 @@ class CameraCalibration():
         self.rgb_ir_calibration()
 
         # Give Feedback to PM
-        self.pub_task_finished.publish(self.task_finished_command)
+        self.publish_task_finished()
         rospy.logwarn('[CC] Main process finished')
 
     def cleanup(self):
