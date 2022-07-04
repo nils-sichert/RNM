@@ -3,7 +3,6 @@ import os
 import sys
 import time
 
-import cv2
 import cv2 as cv
 import numpy as np
 import rospy
@@ -173,7 +172,7 @@ class CameraCalibration():
 
             rospy.logwarn(f"[CC] Collected data for frame with ID: {self.joint_list_pos}")
       
-    
+
     def rgb_ir_calibration(self):
         """ This function calibrates the rgb and ir camera:
             Saves all important parameters as .npy and write new yaml file for camera driver
