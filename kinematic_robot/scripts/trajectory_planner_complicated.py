@@ -4,7 +4,7 @@ from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.optimize
+#import scipy.optimize
 from matplotlib.ticker import FormatStrFormatter
 from numpy.polynomial import Polynomial
 import math
@@ -97,7 +97,6 @@ class TrajectorySegment:
         y_values    = np.array(poly.deriv(derivative)(x_values - self.start_t))
 
         return y_values
-
 
 
 class Trajectory:
@@ -765,7 +764,6 @@ class TrajectoryPlannerComplicated:
 
         # calculate each joint state for given movement speed and 1000Hz publishing rate
         np.savetxt(file_path, positions, delimiter=',', fmt='%+.20f')
-        #rospy.logwarn(f'[TPc] Generated simple trajectory in file {file_output_name}')     # TODO activate
 
 
     # Main methods
@@ -1055,7 +1053,7 @@ class TrajectoryPlannerComplicated:
         return alphas_t, adjust_vel_t, initial_dur_t
         
 
-    # Old and obsolete methods
+    # Old methods
     def plot_duration_vs_v2(self, og_wp1, og_wp2, kin_limits, v1_list : List, v2_marker=None, scaled=False):
         ''' Plots a graph for the duration with a given v1 
             Parameters:
@@ -1184,14 +1182,14 @@ class TrajectoryPlannerComplicated:
         def f2(og_v2):
             return self.get_sequences_duration(og_wp1, og_wp2, og_v1, og_v2, kin_limits, enforce_monotony=True) + target_dur
 
-        x0  = 1e-6 * max_vel
-        try:
-            est_v2  = scipy.optimize.newton(f1, x0, tol=err_tol)
-        except RuntimeError:
-            try:
-                est_v2  = scipy.optimize.newton(f2, x0, tol=err_tol)
-            except RuntimeError:
-                est_v2 = self.get_sequences_v2(target_dur, og_wp1, og_wp2, og_v1, kin_limits)
+        #x0  = 1e-6 * max_vel
+        #try:
+        #    est_v2  = scipy.optimize.newton(f1, x0, tol=err_tol)
+        #except RuntimeError:
+        #    try:
+        #        est_v2  = scipy.optimize.newton(f2, x0, tol=err_tol)
+        #    except RuntimeError:
+        #        est_v2 = self.get_sequences_v2(target_dur, og_wp1, og_wp2, og_v1, kin_limits)
 
         est_dur = self.get_sequences_duration(og_wp1, og_wp2, og_v1, est_v2, kin_limits, enforce_monotony=True)
         dur_err = abs(target_dur - est_dur)
@@ -1237,7 +1235,7 @@ class TrajectoryPlannerComplicated:
                 assert dist > full_ramp_dist, f'Waypoint {wp1} and {wp2} of joint {joint_id} are too close together for full ramps'
         
         
-        alphas_t, adjust_vel_t, initial_dur_t = self.get_waypoint_parameters(waypoints_t, ideal_vel_t, sync_joints=False, debug=debug)
+        alphas_t, adjust_vel_t, _ = self.get_waypoint_parameters(waypoints_t, ideal_vel_t, sync_joints=False, debug=debug)
         
         # Get trajectories
         trajectories    = self.get_trajectories(waypoints_t, adjust_vel_t, alphas_t)
@@ -1246,6 +1244,9 @@ class TrajectoryPlannerComplicated:
         max_times       = [traj.time_list[-1] for traj in trajectories]
         max_time        = max(max_times)
         trajectories_p  = self.pad_all_trajectories_until_time(max_time + 1)
+
+        if debug:
+            self.plot_all_trajectories()
 
         self.save_trajectories_to_file(file_output_name)
 
