@@ -62,8 +62,8 @@ class MotionExecutor:
         current_pose_cartesian = self.robot_kinematics.get_pose_from_angles(current_pose)
 
         # get target cartesian robot state
-        start_pose = self.robot_kinematics.get_pose_from_angles(list[0])     # /FIXME confirm correction and error handling if List is empty
-        delta_pose = start_pose - current_pose_cartesian
+        start_pose_cartesian = self.robot_kinematics.get_pose_from_angles(list[0])     # /FIXME confirm correction and error handling if List is empty
+        delta_pose = start_pose_cartesian - current_pose_cartesian
         err_tol = 1e-2
         max_delta_pose = np.abs(delta_pose).max()
         if max_delta_pose > err_tol:
@@ -71,7 +71,7 @@ class MotionExecutor:
             rospy.logwarn("[ME] Robot NOT at planned start pose")  
             # calculate distance between cartesian coordinates of current and start position
             steps           = int(max_delta_pose / MOVEMENT_SPEED)
-            delta_joints_per_step = (delta_pose) / steps
+            delta_joints_per_step = np.abs(delta_pose).max() / steps
             
             # set Updaterate to 1000 Hz and publish every 1ms a new joint state
             rate    = rospy.Rate(1000)
