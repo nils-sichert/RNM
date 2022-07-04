@@ -50,9 +50,51 @@ class path_planner:
 
         return path_list
 
+
     def calculate_intersection(self, goal_pose):
-        #TODO Controll Calculation!
-        #FIXME local Parameter from rospy params
+        # /FIXME local Parameter from rospy params
+        # /TODO Confirm correct functionality       
+        
+
+        # Needle offset
+        needle_offset = [0, 0, 0.16]    # In end-effector frame
+
+        # TODO make x and y depanden on scelleton angle
+        x_shift = 0.0       # +x towards hallway
+        y_shift = 0.1      # +y towards desk
+        z_shift = 0.2       # +z towards ceiling
+
+        # For debug overwrite parameters
+        if False:
+            goal_pose[9:] = [1,1,1]
+            x_shift = 1.0       # +x towards hallway
+            y_shift = 1.0      # +y towards desk
+            z_shift = 0.0       # +z towards ceiling
+            needle_offset = [0, 0, 2] 
+
+        target_point    = np.array(goal_pose[9:])
+        insert_point    = target_point + [x_shift, y_shift, z_shift]
+
+        insert_dir      = target_point - insert_point                   # Insertion direction
+        insert_dir      = insert_dir / np.linalg.norm(insert_dir)
+        needle_axis     = needle_offset / np.linalg.norm(needle_offset)
+
+        # According to https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d/897677#897677
+        v = np.cross(insert_dir, needle_axis)
+        c = np.dot(insert_dir, needle_axis)
+        
+        v_cross = np.array([[    0,-v[2],  v[1]],
+                            [ v[2],    0, -v[0]],
+                            [-v[1], v[0],     0]])
+
+        rot_mat = np.eye(3) + v_cross + np.linalg.matrix_power(v_cross, 2) / (1 + c)
+        
+        needle_offset_rot         = np.matmul(rot_mat, needle_offset)
+        insertion_point_offsetted = insert_point + needle_offset_rot
+
+        insertion_pose  = np.append(rot_mat, insertion_point_offsetted)
+
+        return insertion_pose
 
         offset_insection = np.array([0,0,0]).reshape((3,1))
         pos_target = np.array(goal_pose[9:]).reshape((3,1))
@@ -64,7 +106,7 @@ class path_planner:
         # normieren
         # Normalenvektoren bilden 
         # Stackoverflow 
-        return A_intersection
+        #return A_intersection
 
         pos_offset = np.matmul(rot_mat, offset_insection) 
 
