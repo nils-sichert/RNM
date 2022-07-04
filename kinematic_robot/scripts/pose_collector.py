@@ -25,12 +25,16 @@ class pose_collector():
 
 
     def __init__(self):
+        # Command to grab pointcloud manually with terminal
+        # rosrun pcl_ros pointcloud_to_pcd input:=/points2
+        # rostopic pub /position_reached std_msgs/Bool True
+
 
         self.MR_path_dataset = os.path.join(os.path.dirname(__file__), 'CV_model_registration_data/dataset001')
         self.CC_path_dataset = os.path.join(os.path.dirname(__file__), 'calibration_datasets/dataset001')
 
         # Set this path to self.CC_path_dataset or self_MR_path_dataset
-        self.path_dataset = self.CC_path_dataset
+        self.path_dataset = self.MR_path_dataset
 
 
 
@@ -49,10 +53,10 @@ class pose_collector():
         self.bridge = CvBridge()
 
         # Camera Setup
-        self.rgb_frame          = rospy.Subscriber("/rgb/image_raw", Image, self.rgb_image_callback)
-        self.ir_frame           = rospy.Subscriber("/ir/image_raw", Image, self.ir_image_callback)
-        self.ir_frame           = rospy.Subscriber("/ir/image_raw", PointCloud2, self.pc_callback)
-        #/points2
+        self.sub_rgb_frame          = rospy.Subscriber("/rgb/image_raw", Image, self.rgb_image_callback)
+        self.sub_ir_frame           = rospy.Subscriber("/ir/image_raw", Image, self.ir_image_callback)
+        self.sub_pc                 = rospy.Subscriber("/points2", PointCloud2, self.pc_callback)
+  
 
         
     # Store Current RGB Frame In Class Variable
@@ -62,38 +66,10 @@ class pose_collector():
         except CvBridgeError:
             print ("error bridging ROS Image-Message to OpenCV Image")
 
-    def callback(self, ros_point_cloud : PointCloud2):
+    def pc_callback(self, ros_point_cloud : PointCloud2):
         self.pc2 = PointCloud2()
         self.pc2 = ros_point_cloud
 
-
-    def save_pointcloud2(self):
-        
-        xyz = np.array([[0,0,0]])
-        rgb = np.array([[0,0,0]])
-        #self.lock.acquire()
-        gen = pc2.read_points(self.pc2, skip_nans=True)
-        int_data = list(gen)
-
-        for x in int_data:
-            test = x[3] 
-            # cast float32 to int so that bitwise operations are possible
-            s = struct.pack('>f' ,test)
-            i = struct.unpack('>l',s)[0]
-            # you can get back the float value by the inverse operations
-            pack = ctypes.c_uint32(i).value
-            r = (pack & 0x00FF0000)>> 16
-            g = (pack & 0x0000FF00)>> 8
-            b = (pack & 0x000000FF)
-            # prints r,g,b values in the 0-255 range
-                        # x,y,z can be retrieved from the x[0],x[1],x[2]
-            xyz = np.append(xyz,[[x[0],x[1],x[2]]], axis = 0)
-            rgb = np.append(rgb,[[r,g,b]], axis = 0)
-
-        out_pcd = o3d.geometry.PointCloud()    
-        out_pcd.points = o3d.utility.Vector3dVector(xyz)
-        out_pcd.colors = o3d.utility.Vector3dVector(rgb)
-        o3d.io.write_point_cloud(self.path_dataset"PCD_1.ply",out_pcd)
 
 
     # Store Current IR Frame In Class Variable
