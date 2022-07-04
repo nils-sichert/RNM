@@ -4,6 +4,7 @@ import numpy as np
 import csv
 import os
 from tqdm import tqdm
+from robot_kinematics import robot_kinematics
 
 
 class path_planner:
@@ -57,18 +58,30 @@ class path_planner:
         pos_target = np.array(goal_pose[9:]).reshape((3,1))
         rot_mat = np.array(goal_pose[0:9]).reshape((3,3))
 
+        A_intersection = np.append(rot_mat, np.array([pos_target[0]-0.1, pos_target[1], pos_target[2]+0.2]))
+
+        # diff Vektoren
+        # normieren
+        # Normalenvektoren bilden 
+        # Stackoverflow 
+        return A_intersection
+
         pos_offset = np.matmul(rot_mat, offset_insection) 
 
         rospy.logwarn("[PP] Pos Offset" + str(pos_offset))
 
-        intersection_hight = 0.2                                      #FIXME local Parameter from rospy params
+        intersection_height = 0.15                                      #FIXME local Parameter from rospy params
+
+        pos_intersection = np.matmul(rot_mat,np.ones((3,1))) * n + pos_target - pos_offset
+
+
         a,b,c,d,e,f,g,h,i = goal_pose[0], goal_pose[1], goal_pose[2], goal_pose[3], goal_pose[4], goal_pose[5], goal_pose[6], goal_pose[7], goal_pose[8]
-        n = float(intersection_hight/(g+h+i))
+        n = float(intersection_height/(g+h+i))
         pos_intersection = np.matmul(rot_mat,np.ones((3,1)))*n + pos_target - pos_offset
 
         rospy.logwarn("[PP] Pos Intersection" + str(pos_intersection))
 
-        A_intersection = [a,b,c,d,e,f,g,h,i,pos_intersection[0][0],pos_intersection[1][0], pos_intersection[2][0]]
+        A_intersection = np.array([a,b,c,d,e,f,g,h,i,pos_intersection[0][0],pos_intersection[1][0], pos_intersection[2][0]])
         
         return A_intersection
 
@@ -81,6 +94,7 @@ class path_planner:
         tmp_A_list = []
         # iterates over given waypoints and calculate nessesary number of additional waypoints to be below max. distance between waypoints
         for i in range(len(input_path)-1):
+            #TODO Do not interpolate over roation
             next_pose = np.array(input_path[i+1])
             delta_pose = next_pose - current_pose
             tmp_dist = np.linalg.norm(delta_pose)
@@ -98,9 +112,12 @@ class path_planner:
             file.truncate(0)
 
         current_theta = current_joint_state
+        with open((os.path.join(os.path.dirname(__file__),output_filename)), mode="a", newline="") as f:
+                writer = csv.writer(f, delimiter=",")
+                writer.writerow(current_theta)
         # calculate joint space for each A and write it into file
-        for i in tqdm(range(len(tmp_A_list)), ncols=100 ):
-            goal_pose = tmp_A_list [i]
+        for i in tqdm(range(len(tmp_A_list)-1), ncols=100 ):
+            goal_pose = tmp_A_list [i+1]
             current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,goal_pose)
             with open((os.path.join(os.path.dirname(__file__),output_filename)), mode="a", newline="") as f:
                 writer = csv.writer(f, delimiter=",")
@@ -121,7 +138,8 @@ class path_planner:
 
 if __name__ == '__main__':
     
-    path_planner = path_planner()    
+    kinematic   = robot_kinematics()
+    path_planner = path_planner(kinematic)    
     
     current_joint_state                     = [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06]
     current_pose                            = [ 7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01  ,2.82213352e-01, -3.40555121e-06,  8.41024897e-01]
@@ -132,4 +150,5 @@ if __name__ == '__main__':
     filename_path_preinsertion_joint_space  = "Path/calculated_path_preinsertion_jointspace.csv"
     filename_path_insertion_joint_space     = "Path/calculated_path_insertion_jointspace.csv"
   
-    path_planner.calculate_target_path(current_joint_state, goal_pose, max_dist_between_waypoints, filename_path_preinsertion_cartesian, filename_path_insertion_cartesian, filename_path_preinsertion_joint_space, filename_path_insertion_joint_space)
+    path_planner.calculate_intersection(goal_pose)
+    #path_planner.calculate_target_path(current_joint_state, goal_pose, max_dist_between_waypoints, filename_path_preinsertion_cartesian, filename_path_insertion_cartesian, filename_path_preinsertion_joint_space, filename_path_insertion_joint_space)

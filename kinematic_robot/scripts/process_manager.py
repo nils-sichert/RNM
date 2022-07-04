@@ -70,8 +70,8 @@ class ProcessManager:
         # Load ROS Parameter
         self.joint_state_topic  = rospy.get_param('/joint_state_topic', "/joint_states")
         self.joint_command_topic= rospy.get_param('/joint_command_topic', "/joint_position_example_controller_sim/joint_command")
-        self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.15)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
-        self.INIT_POSE          = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])
+        self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.01)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
+        self.INIT_POSE          = np.array([0.02932329442236156, -0.4573049080999274, 0.8303120974323208, -2.0195142738134724, -0.17090870390501287, 1.3266037468371865, 1.6624571162065531])
              
         # ROS Helper/ Debuging
         self.user_execution_command = rospy.set_param('/user_execution_command', False)
@@ -93,6 +93,7 @@ class ProcessManager:
 
     # MISC
     def calculate_goal_pose_from_position(self, omega_x = 0, omega_y = 0, omega_z = 0, vec_mat_init = None, vec_mat_camera = None):
+        '''
         goal_position = self.needle_goal_pose
         rot_mat_x = np.array([  [1,0,0],
                                 [0,np.cos(omega_x), -np.sin(omega_x)],
@@ -105,7 +106,8 @@ class ProcessManager:
                                 [0,0,1]])
         rot = np.matmul(np.matmul(rot_mat_x, rot_mat_y),rot_mat_z)
         A = np.append(rot, goal_position)
-        A = [ 0.69257039,  0.34030423, -0.63603403,  0.69002358, -0.56955768,  0.44662234, -0.2102706,  -0.74819588, -0.62927673,  0.34591708,  0.06152325,  0.21930579]
+        '''
+        A = np.array([0.56910864 ,-0.68027837 , 0.46188385, -0.78483952, -0.28187555,  0.55188142, -0.24523923, -0.67658518, -0.69432717,  0.29138331,  0.06223919,  0.23634959])
         return A
 
     # Callbacks
@@ -348,7 +350,7 @@ class ProcessManager:
             # Move robot to pre-insertion pose (blocking)
             if self.is_in_state('s5_pre_insertion'):
                 target_pose = self.calculate_goal_pose_from_position()
-                motion_done = self.motion_manager.move_start2preinsertion(target_pose, self.MOVEMENT_SPEED) 
+                motion_done = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
                 
                 # Exit state - when robot at pre insertion pose
                 if motion_done:
