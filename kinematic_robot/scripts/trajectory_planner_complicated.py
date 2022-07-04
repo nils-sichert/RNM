@@ -4,10 +4,30 @@ from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.optimize
+#import scipy.optimize
 from matplotlib.ticker import FormatStrFormatter
 from numpy.polynomial import Polynomial
 import math
+#import rospy
+
+# UTIL-----------------------------------------------------
+def get_list_from_csv(dir_name, file_name):
+    ''' Get a list of lists from a csv file
+        dir_name should be relative to the location of util.py
+    '''
+
+    output  = []
+    with open((os.path.join(os.path.dirname(__file__), dir_name, file_name)), newline="") as csv_file:
+        reader  = csv.reader(csv_file)
+        for row in reader:
+            row_float = [float(entry) for entry in row]
+            output.append(row_float)
+
+    return output
+
+def printm(message):
+    print(message)
+
 
 
 # CLASSES--------------------------------------------------
@@ -58,7 +78,26 @@ class TrajectorySegment:
 
         return x, y
 
-        
+    def get_y_values(self, x_values : np.array, derivative=0):
+        ''' Returns positions for specified times, where the given times are global for the 
+            trajectory and not local to the segment. Throws an error if the given times are
+            outside of the segment window (i.e. a segment which starts at t0 and ends at t1
+            will reject x values for x < t0 and x > t1
+            Parameters;
+                x_values (np.array): Desired times
+                derivative (int): Indicates the desired derivative of the polynomial
+            Returns:
+                y_values (np.array): Position data corresponding to desired times
+        '''
+
+        assert x_values.min() >= self.start_t, f'x_values can not be < start_t'
+        assert x_values.max() <= self.end_t, f'x_values can not be > end_t'
+
+        poly        = Polynomial(self.poly_coef)
+        y_values    = np.array(poly.deriv(derivative)(x_values - self.start_t))
+
+        return y_values
+
 
 class Trajectory:
     ''' Stores trajectory for one joint. Trajectory segments must be registered
@@ -113,6 +152,60 @@ class Trajectory:
                 step (float): Sampling step size for the trajectory
                 sig_dec (int): Significicant decimal for rounding operations
             Returns:
+                x_vals (List): All time values for sampled points
+                y_vals (List): All position values for sampled points
+                (self.time_list, pos, is_wp) (Tuple)
+                    self.time_list (List): All time stamps for segments points
+                    pos (List): All positions for segment points
+                    is_wp (List): Bool to indicate waypoint (if false: control point)
+        '''
+        # Get clean x_vals
+        max_t   = np.floor(self.time_list[-1] * 10**sig_dec) / 10**sig_dec + step
+        n_steps = int(max_t / step)
+        x_vals  = np.zeros(n_steps)
+        x_vals  = [i * step for i in range(0, n_steps)]
+        x_vals  = np.round(x_vals, sig_dec + 1)
+
+        x_temp  = []
+        x_conf  = np.zeros(x_vals.shape[0])
+        y_vals  = np.zeros(x_vals.shape[0])
+        pos     = []
+        is_wp   = []
+
+        # Iterate over all x_vals, get y_vals and secondary values
+        for segment in self.segment_list:
+            start_t = segment.start_t
+            end_t   = segment.end_t
+
+            x_indx  = np.array(np.where(np.logical_and(x_vals >= start_t, x_vals <= end_t)))
+            x_temp  = x_vals[x_indx]
+            x_conf[x_indx] = x_temp
+            y_vals[x_indx] = segment.get_y_values(x_temp, derivative=derivative)
+
+            pos.append(segment.start_pos)
+            is_wp.append(segment.is_waypoint)
+
+        pos.append(self.segment_list[-1].end_pos)
+        is_wp.append(True)
+        
+        x_vals  = np.append(x_vals, max_t + step)
+        x_conf  = np.append(x_conf, max_t + step)
+        y_vals  = np.append(y_vals, segment.get_y_values(segment.end_t, derivative=derivative))      
+
+        assert x_vals.shape == y_vals.shape, 'x_vals and y_vals have different length'
+        assert np.array_equal(x_vals, x_conf), 'x_vals and x_conf not equal'
+
+        return x_vals, y_vals, (self.time_list, pos, is_wp)
+
+    def get_all_segments_old(self, derivative=0, step=0.001, sig_dec=3):
+        ''' Stitches all available segments together and returns an x and y list for all segemnts
+            in the specified sampling resolution. Additionally returns an array with all 
+            time_offsets, positions and waypoint indicator
+            Parameters:
+                derivative (int): The desired derivative of the segments
+                step (float): Sampling step size for the trajectory
+                sig_dec (int): Significicant decimal for rounding operations
+            Returns:
                 x (List): All time values for sampled points
                 y (List): All position values for sampled points
                 (self.time_list, pos, is_wp) (Tuple)
@@ -153,26 +246,8 @@ class Trajectory:
 
         self.register_segment(poly_coef, duration, last_p, last_p, True)
 
-# UTIL-----------------------------------------------------
-def get_list_from_csv(dir_name, file_name):
-    ''' Get a list of lists from a csv file
-        dir_name should be relative to the location of util.py
-    '''
 
-    output  = []
-    with open((os.path.join(os.path.dirname(__file__), dir_name, file_name)), newline="") as csv_file:
-        reader  = csv.reader(csv_file)
-        for row in reader:
-            row_float = [float(entry) for entry in row]
-            output.append(row_float)
-
-    return output
-
-def printm(message):
-    print(message)
-
-
-class TrajectoryPlanner: 
+class TrajectoryPlannerComplicated: 
     ''' Takes in a list of joint positions "waypoints" and returns a list of 1kHz joint commands.
     '''
 
@@ -203,6 +278,7 @@ class TrajectoryPlanner:
 
         # Create trajectory objects
         self.trajectories   = [Trajectory(joint_id, 0) for joint_id in range(num_joints)]    #type: List[Trajectory]
+        self.num_joints     = num_joints
 
     def __get_quintic_params(self, t, pos, vel, acc):
         ''' Get parameters for quintic polynomial from time, position, velocity 
@@ -662,16 +738,33 @@ class TrajectoryPlanner:
         ''' Saves the stored trajectories to the specified file in 1ms steps. 
             Overrides any existing file 
         '''
-        times_t     = []
+        file_path   = os.path.join(os.path.dirname(__file__), file_output_name)
         positions_t = []
+        times_t     = []    # For error detection
+        last_pos    = []    # For error detection
 
         for traj in self.trajectories:
-            x, y, _     = traj.get_all_segments(step=0.001, sig_dec=3)
+            x, y, (_, pos, _) = traj.get_all_segments(step=0.001, sig_dec=3)
             times_t.append(x)
             positions_t.append(y)
-            a = 1
+            last_pos.append(pos[-1])
 
-        a = 1
+        times_t     = np.array(times_t)
+        positions_t = np.array(positions_t)
+        positions   = np.transpose(positions_t)
+
+        # Error checks
+        assert np.array_equal(times_t[:,0], np.zeros(self.num_joints)), 'Joints do not start at time 0'
+        assert np.array_equal(positions_t[:,-1], last_pos), 'Joints do not end at desired position'
+        assert len(np.unique(times_t[:,-1])) == 1, 'Joints have different end times'
+
+        # Delete content of existing file
+        with open(file_path,'w+') as file:
+            file.truncate(0)
+
+        # calculate each joint state for given movement speed and 1000Hz publishing rate
+        np.savetxt(file_path, positions, delimiter=',', fmt='%+.20f')
+
 
     # Main methods
     def get_trajectories(self, waypoints_t : np.array, velocities_t : np.array, alphas_t : np.array, debug=False):
@@ -960,7 +1053,7 @@ class TrajectoryPlanner:
         return alphas_t, adjust_vel_t, initial_dur_t
         
 
-    # Old and obsolete methods
+    # Old methods
     def plot_duration_vs_v2(self, og_wp1, og_wp2, kin_limits, v1_list : List, v2_marker=None, scaled=False):
         ''' Plots a graph for the duration with a given v1 
             Parameters:
@@ -1089,14 +1182,14 @@ class TrajectoryPlanner:
         def f2(og_v2):
             return self.get_sequences_duration(og_wp1, og_wp2, og_v1, og_v2, kin_limits, enforce_monotony=True) + target_dur
 
-        x0  = 1e-6 * max_vel
-        try:
-            est_v2  = scipy.optimize.newton(f1, x0, tol=err_tol)
-        except RuntimeError:
-            try:
-                est_v2  = scipy.optimize.newton(f2, x0, tol=err_tol)
-            except RuntimeError:
-                est_v2 = self.get_sequences_v2(target_dur, og_wp1, og_wp2, og_v1, kin_limits)
+        #x0  = 1e-6 * max_vel
+        #try:
+        #    est_v2  = scipy.optimize.newton(f1, x0, tol=err_tol)
+        #except RuntimeError:
+        #    try:
+        #        est_v2  = scipy.optimize.newton(f2, x0, tol=err_tol)
+        #    except RuntimeError:
+        #        est_v2 = self.get_sequences_v2(target_dur, og_wp1, og_wp2, og_v1, kin_limits)
 
         est_dur = self.get_sequences_duration(og_wp1, og_wp2, og_v1, est_v2, kin_limits, enforce_monotony=True)
         dur_err = abs(target_dur - est_dur)
@@ -1142,7 +1235,7 @@ class TrajectoryPlanner:
                 assert dist > full_ramp_dist, f'Waypoint {wp1} and {wp2} of joint {joint_id} are too close together for full ramps'
         
         
-        alphas_t, adjust_vel_t, initial_dur_t = self.get_waypoint_parameters(waypoints_t, ideal_vel_t, sync_joints=False, debug=debug)
+        alphas_t, adjust_vel_t, _ = self.get_waypoint_parameters(waypoints_t, ideal_vel_t, sync_joints=False, debug=debug)
         
         # Get trajectories
         trajectories    = self.get_trajectories(waypoints_t, adjust_vel_t, alphas_t)
@@ -1152,28 +1245,22 @@ class TrajectoryPlanner:
         max_time        = max(max_times)
         trajectories_p  = self.pad_all_trajectories_until_time(max_time + 1)
 
-        self.save_trajectories_to_file('test_traj_file.csv')
+        if debug:
+            self.plot_all_trajectories()
+
+        self.save_trajectories_to_file(file_output_name)
 
         a = 1
         
 
 
-
-
-
 # /TODO: Quintic interpolation for slower joints
-# DONE: Rename 4segements to something better
-# /TODO: package max_vel, max_acc, max_jrk in function signatures to something better
-# /TODO: Include alpha factor in get_waypoint_parameters
-# /TODO: Include alpha factor in get_trajectory
-# /TODO: Fix velocity jumps
-#   /DONE: Precompute max velocities and min durations
-# DONE: Validate get_sequence_alpha function
-# DONE: alpha_marker in plot_duration_vs_alpha doesnt work as intended
 
-select  = 4
+if __name__ == '__main__':
+    select  = 3
+
 # Test create_point_to_point_traj
-if __name__ == '__main__' and select == 4:
+if __name__ == '__main__' and select == 3:
 
     # Init
     limits  = { "q_pos_max" : [ 2.8973, 1.7628, 2.8973,-0.0698, 2.8973, 3.7525, 2.8973],
@@ -1189,7 +1276,7 @@ if __name__ == '__main__' and select == 4:
     wp1         = waypoints[0]
     wp2         = waypoints[1]
 
-    trajectory_planer = TrajectoryPlanner(limits, 7)
+    trajectory_planer = TrajectoryPlannerComplicated(limits, 7)
     trajectory_planer.create_point_to_point_traj(wp1, wp2, 'test_create_p2p_traj.csv')
     trajectory_planer.plot_all_trajectories()
     a = 1
@@ -1221,7 +1308,7 @@ if __name__ == '__main__' and select == 0:
     max_vel_l = limits['q_vel_max']
 
     waypoints_t         = np.transpose(waypoints)
-    trajectory_planer   = TrajectoryPlanner(limits, 7, safety_factor=1, safety_margin=0)
+    trajectory_planer   = TrajectoryPlannerComplicated(limits, 7, safety_factor=1, safety_margin=0)
 
     num_joints  = waypoints_t.shape[0]
     num_wp      = waypoints_t.shape[1]
@@ -1263,7 +1350,7 @@ if __name__ == '__main__' and select == 1:
     for key in keys:
         limits[key] = np.rad2deg(limits[key])
 
-    trajectory_planer   = TrajectoryPlanner(limits, safety_factor=1, safety_margin=0)
+    trajectory_planer   = TrajectoryPlannerComplicated(limits, safety_factor=1, safety_margin=0)
 
     # Settings
     waypoints_t = np.transpose(waypoints)
@@ -1309,7 +1396,7 @@ if __name__ == '__main__' and select == 2:
     for key in keys:
         limits[key] = np.rad2deg(limits[key])
 
-    trajectory_planer   = TrajectoryPlanner(limits, safety_factor=1, safety_margin=0)
+    trajectory_planer   = TrajectoryPlannerComplicated(limits, safety_factor=1, safety_margin=0)
 
     # Settings
     waypoints_t = np.transpose(waypoints)
