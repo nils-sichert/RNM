@@ -15,7 +15,12 @@ class ModelRegistration():
 
     def __init__(self):
 
-        # Paths To load In Data
+        #temp comment
+        # joint state dataset001 (-0.3837760589666534, -0.9570982191319702, -0.09547887552934779, -1.8819315434119188, 0.026096191945840848, 2.678227669855995, 0.7275825914452366)
+        # joint state dataset002 (0.2513670449047758, -1.3531158464924882, -0.16343294161688351, -2.3963478467766994, -0.027651678348580993, 2.685546017169854, 0.5202622859395462)
+        # joint state dataset003 (0.10648101795244204, -0.5325129005978491, -0.13972313721137586, -1.7850238601411241, -0.028194630339917627, 2.8181465023419947, 0.528756094048057)
+
+       # Paths To load In Data
         self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/joint_list_MR.npy')  #TODO: Create joint_list_mr with pose collector
         self.stl_path = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/Skeleton_Target.stl')
         self.pcd_path = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/PCD_1.pcd') #TODO: Add PCD File Name or name it like this is pose collector
@@ -90,7 +95,7 @@ class ModelRegistration():
 
         msg = msg.data
         if msg == self.TASKCMD:
-            rospy.logwarn(f'[CC] Received correct start command "{msg}"')
+            rospy.logwarn(f'[MR] Received correct start command "{msg}"')
             self.start_task = True
 
     def is_topic_published(self, topic_name : str):
@@ -124,9 +129,8 @@ class ModelRegistration():
         msg.data    = needle_point
 
         self.pub_needle_goal_pose.publish(msg)
-       
-
-        rospy.logwarn(f"[CC] Send new goal_pose_js with ID {pose_id}")
+        # TODO: Store in fila on disk
+        rospy.logwarn(f"[MR] Send new needle_goal_pose")
     
     ################### generating a mesh on the skeleton ########################
     def mesh(self):
@@ -234,7 +238,7 @@ class ModelRegistration():
             self.goal_point_in_target_frame = np.dot(self.result_icp.transformation, self.goal_point_column)
             print(self.goal_point_in_target_frame)
 
-    def main(self):
+    def main_process(self):
 
         # Load Joint List For Goal Positions
         joint_list = np.load(self.joint_list_path)
@@ -257,12 +261,12 @@ class ModelRegistration():
                 self.joint_list_pos += 1
 
                 #Collect Point Cloud in Realtime (at desired position)
-            
+
 
                 # Creating Source Target from File
                 self.prepare_dataset(self.voxel_size)
                 
-                rospy.logwarn('[MR] Prepared Pointclouds')
+                rospy.logwarn('[MR] Pointclouds Prepared')
 
                 # Get self.result_fast
                 self.execute_fast_global_registration()
@@ -310,8 +314,9 @@ class ModelRegistration():
 def main(args):       
     try:
         model_registration = ModelRegistration()
-        model_registration.main()
+        model_registration.main_process()
         rospy.spin()
+
     except KeyboardInterrupt:
         rospy.logwarn("[MR] Shutting down vision node.")
     

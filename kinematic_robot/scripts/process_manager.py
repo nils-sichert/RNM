@@ -38,7 +38,7 @@ class ProcessManager:
 
         self.curr_state = 's0_start'            # Current state
         self.user_execution_command = False     # Confirm next state with user_execution_command
-        self.user_next_state        = 'None'    # Ovrride next state with user_next_state
+        self.user_next_state        = 'NEIN'    # Ovrride next state with user_next_state
 
         self.first_run_in_state     = False     # Set to true when state transition in go_to_next_state
                                                 # set to false after first run in state in is_first_run_in_state
@@ -165,8 +165,8 @@ class ProcessManager:
     def get_user_next_state(self):
         ''' Read user next state from rosparam
         '''
-        new_user_next_state = rospy.get_param('/user_next_state', 'None')
-        if self.user_next_state == 'None' and not new_user_next_state == 'None':
+        new_user_next_state = rospy.get_param('/user_next_state', 'NEIN')
+        if self.user_next_state == 'NEIN' and not new_user_next_state == 'NEIN':
             rospy.logwarn(f"[PM] Received user next state: {new_user_next_state}")
 
             # Check if state is in all_states
@@ -194,7 +194,7 @@ class ProcessManager:
     def reset_user_next_state(self):
         ''' Resets the user_next_state
         '''
-        self.user_next_state = rospy.set_param('/user_next_state', 'None')
+        self.user_next_state = rospy.set_param('/user_next_state', 'NEIN')
 
     # Process flow control methods
     def is_in_state(self, state_name : str):
@@ -225,7 +225,7 @@ class ProcessManager:
         # Set next state. Set to none, if last state has been reached
         if state_idx == len(self.all_states) - 1:
             rospy.logwarn("[PM] Reached end state, no next state specified")
-            next_state = None
+            next_state = 's0_start'
         else:
             next_state  = self.all_states[state_idx + 1]
 
@@ -240,7 +240,7 @@ class ProcessManager:
                 break
 
             # Overrule next state selection with user_next_state command
-            if not self.user_next_state == 'None':
+            if not self.user_next_state == 'NEIN':
                 next_state = self.user_next_state
                 self.reset_user_next_state()
                 break

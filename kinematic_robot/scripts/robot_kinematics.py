@@ -51,9 +51,7 @@ class robot_kinematics:
                 err_tol (float): Error tolerance for returned angles
 
             Returns:
-                A (Matrix): Pose matrix
-                    Position is in A[9:12]
-                    Rotation is in np.reshape(A[0:9], (3,3))
+                TODO
                 pos_error (float): Cartesian position error
         '''
         
@@ -88,57 +86,7 @@ class robot_kinematics:
             delta_sqsum = sum(delta_A**2)
             delta_max   = max(abs(delta_A))
             counter += 1
-            """            
-            if delta_sqsum >= sum(delta_list_sqsum[-n_last_entries:])/n_last_entries and len(delta_list_sqsum) >= n_last_entries:
-                delta_list_sqsum.append(delta_sqsum)
-                n_failed_iterations += 1
-                #print("Warning: IK (square sum) not converging")
-                #print(delta_list_sqsum[-5:])
-
-            elif delta_max >= sum(delta_list_max[-n_last_entries:])/n_last_entries and len(delta_list_max) >= n_last_entries:
-                delta_list_max.append(delta_max)
-                n_failed_iterations += 1
-                #print("Warning: IK (max value) not converging")
-                #print(delta_list_max[-5:])
-
-            else:
-                delta_list_sqsum.append(delta_sqsum)
-                delta_list_max.append(delta_max)
-                n_failed_iterations = 0
-
-            # Detect too many failed consecutive iterations
-            if n_failed_iterations > n_allowed_fails:
-                 print("Warning: Too many failed consecutive iterations. Aborting IK")
-                 self.debug = True      # Enable to show plot
-                 break
-
-            pass
-        
-        # Show delta stats progress
-        if self.debug:
-            iteration1   = range(len(delta_list_sqsum))
-            iteration2   = range(len(delta_list_max))
-
-            fig, ax1    = plt.subplots()
-            ax1.set_xlabel('Iteration')
-            ax1.set_ylabel('Squared sum error')
-            ax1.plot(iteration1, delta_list_sqsum, color='blue', label='Squared sum')
-            l1, label1  = ax1.get_legend_handles_labels()
-            ax1.tick_params(axis='y', labelcolor='blue')
-            ax1.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
-
-            ax2         = ax1.twinx()
-            ax2.set_ylabel('Maximum error')
-            ax2.plot(iteration2, delta_list_max, color="red", label='Maximum')
-            l2, label2  = ax2.get_legend_handles_labels()
-            ax2.tick_params(axis='y', labelcolor='red')
-            ax2.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
-
-            ax2.legend(l1 + l2, label1 + label2)
-            fig.suptitle('Convergence Behaviour')
-            plt.grid()
-            plt.show()
-            """
+          
         pos_error   = np.linalg.norm(delta_A[9:12])
         print(counter)
         return theta, pos_error
@@ -155,7 +103,33 @@ class robot_kinematics:
 
 # for testing an debugging
 
-if __name__ == '__main__':
+
+import os
+
+select = 1
+if __name__ == '__main__' and select == 0:
+
+    num_run     = 10
+    kinematics  = robot_kinematics(debug=True)
+    thetas = []
+    poses = []
+    err_tol = 0.0001
+    
+    for _ in range(num_run):
+        theta   = np.random.uniform(low = -2, high=2, size=7)
+        thetas.append(theta)
+        poses.append(kinematics.get_pose_from_angles(theta))
+
+    for i in range(num_run-1):
+        
+        angles, err = kinematics.get_angles_from_pose(thetas[i], poses[i+1])
+        #print(f"poses : {poses[i+1]}")
+        #print(f"angels : {angles}")
+        print(f"err : {err}")
+
+
+
+if __name__ == '__main__' and select == 1:
 
     profiler_on = False
 
@@ -174,6 +148,7 @@ if __name__ == '__main__':
     A_target    = kinematics.get_pose_from_angles(theta_target)
     print(A_init)
    
+    
     
     q_ik, error = kinematics.get_angles_from_pose(theta_init, A_target)
     print(np.rad2deg(q_ik))

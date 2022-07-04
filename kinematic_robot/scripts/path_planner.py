@@ -96,7 +96,7 @@ class path_planner:
         for i in range(len(input_path)-1):
             #TODO Do not interpolate over roation
             next_pose = np.array(input_path[i+1])
-            delta_pose = next_pose - current_pose
+            delta_pose = next_pose - current_pose # TODO cartesian norm between x,y,z
             tmp_dist = np.linalg.norm(delta_pose)
             counter = int((tmp_dist// max_dist_between_waypoints)+1)
 
@@ -123,7 +123,7 @@ class path_planner:
                 writer = csv.writer(f, delimiter=",")
                 writer.writerow(current_theta)
 
-            
+           
         rospy.logwarn("[PP] Got path joint space.")
         self.last_joint = current_theta
 
