@@ -38,11 +38,11 @@ class pose_collector():
         # rostopic pub /position_reached std_msgs/Bool True
 
 
-        self.MR_path_dataset = os.path.join(os.path.dirname(__file__), 'CV_model_registration_data/dataset004')
+        self.MR_path_dataset = os.path.join(os.path.dirname(__file__), 'CV_model_registration_data/dataset009')
         self.CC_path_dataset = os.path.join(os.path.dirname(__file__), 'CV_camera_calibration_data/dataset001')
 
         # Set this path to self.CC_path_dataset or self_MR_path_dataset
-        self.path_dataset = self.CC_path_dataset
+        self.path_dataset = self.MR_path_dataset
 
 
         self.node_name = "pose_collector"
