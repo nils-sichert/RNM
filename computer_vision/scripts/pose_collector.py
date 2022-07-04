@@ -26,7 +26,7 @@ class pose_collector():
 
         self.path_dataset = os.path.join(os.path.dirname(__file__), 'calibration_datasets/dataset001')
         self.node_name = "pose_collector"
-        self.joint_topic = "/joint_states"
+        self.joint_topic = "/franka_state_controller/joint_states_desired"
         self.position_reached_topic = "/position_reached"
         self.current_joints = []
         self.collected_joint_list = []
@@ -42,6 +42,7 @@ class pose_collector():
         # Camera Setup
         self.rgb_frame          = rospy.Subscriber("/rgb/image_raw", Image, self.rgb_image_callback)
         self.ir_frame           = rospy.Subscriber("/ir/image_raw", Image, self.ir_image_callback)
+        #/points2
 
         
     # Store Current RGB Frame In Class Variable
