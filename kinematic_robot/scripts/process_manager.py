@@ -38,7 +38,7 @@ class ProcessManager:
 
         self.curr_state = 's0_start'            # Current state
         self.user_execution_command = False     # Confirm next state with user_execution_command
-        self.user_next_state        = 'None'    # Ovrride next state with user_next_state
+        self.user_next_state        = 'NEIN'    # Ovrride next state with user_next_state
 
         self.first_run_in_state     = False     # Set to true when state transition in go_to_next_state
                                                 # set to false after first run in state in is_first_run_in_state
@@ -105,7 +105,8 @@ class ProcessManager:
                                 [0,0,1]])
         rot = np.matmul(np.matmul(rot_mat_x, rot_mat_y),rot_mat_z)
         A = np.append(rot, goal_position)
-        A = [ 0.69257039,  0.34030423, -0.63603403,  0.69002358, -0.56955768,  0.44662234, -0.2102706,  -0.74819588, -0.62927673,  0.34591708,  0.06152325,  0.21930579]
+        
+        A = np.array([ 0.69257039,  0.34030423, -0.63603403,  0.69002358, -0.56955768,  0.44662234, -0.2102706,  -0.74819588, -0.62927673,  0.34591708,  0.06152325,  0.21930579])
         return A
 
     # Callbacks
@@ -163,8 +164,8 @@ class ProcessManager:
     def get_user_next_state(self):
         ''' Read user next state from rosparam
         '''
-        new_user_next_state = rospy.get_param('/user_next_state', 'None')
-        if self.user_next_state == 'None' and not new_user_next_state == 'None':
+        new_user_next_state = rospy.get_param('/user_next_state', 'NEIN')
+        if self.user_next_state == 'NEIN' and not new_user_next_state == 'NEIN':
             rospy.logwarn(f"[PM] Received user next state: {new_user_next_state}")
 
             # Check if state is in all_states
@@ -192,7 +193,7 @@ class ProcessManager:
     def reset_user_next_state(self):
         ''' Resets the user_next_state
         '''
-        self.user_next_state = rospy.set_param('/user_next_state', 'None')
+        self.user_next_state = rospy.set_param('/user_next_state', 'NEIN')
 
     # Process flow control methods
     def is_in_state(self, state_name : str):
@@ -223,7 +224,7 @@ class ProcessManager:
         # Set next state. Set to none, if last state has been reached
         if state_idx == len(self.all_states) - 1:
             rospy.logwarn("[PM] Reached end state, no next state specified")
-            next_state = None
+            next_state = 's0_start'
         else:
             next_state  = self.all_states[state_idx + 1]
 
@@ -238,7 +239,7 @@ class ProcessManager:
                 break
 
             # Overrule next state selection with user_next_state command
-            if not self.user_next_state == 'None':
+            if not self.user_next_state == 'NEIN':
                 next_state = self.user_next_state
                 self.reset_user_next_state()
                 break
@@ -347,8 +348,8 @@ class ProcessManager:
             # S6 Move to pre-insertion pose--------------------------------------------------------
             # Move robot to pre-insertion pose (blocking)
             if self.is_in_state('s5_pre_insertion'):
-                target_pose = self.calculate_goal_pose_from_position()
-                motion_done = self.motion_manager.move_start2preinsertion(target_pose, self.MOVEMENT_SPEED) 
+                #target_pose = self.calculate_goal_pose_from_position()
+                motion_done = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
                 
                 # Exit state - when robot at pre insertion pose
                 if motion_done:

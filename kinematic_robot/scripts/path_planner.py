@@ -82,7 +82,7 @@ class path_planner:
         # iterates over given waypoints and calculate nessesary number of additional waypoints to be below max. distance between waypoints
         for i in range(len(input_path)-1):
             next_pose = np.array(input_path[i+1])
-            delta_pose = next_pose - current_pose
+            delta_pose = next_pose - current_pose # TODO cartesian norm between x,y,z
             tmp_dist = np.linalg.norm(delta_pose)
             counter = int((tmp_dist// max_dist_between_waypoints)+1)
 
@@ -98,15 +98,19 @@ class path_planner:
             file.truncate(0)
 
         current_theta = current_joint_state
+        with open((os.path.join(os.path.dirname(__file__),output_filename)), mode="a", newline="") as f:
+            writer = csv.writer(f, delimiter=",")
+            writer.writerow(current_theta)
+
         # calculate joint space for each A and write it into file
-        for i in tqdm(range(len(tmp_A_list)), ncols=100 ):
-            goal_pose = tmp_A_list [i]
-            current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta,goal_pose)
+        for i in tqdm(range(len(tmp_A_list)-1), ncols=100 ):
+            goal_pose = tmp_A_list [i+1]
+            current_theta, pos_err = self.robot_kinematics.get_angles_from_pose(current_theta, goal_pose)
             with open((os.path.join(os.path.dirname(__file__),output_filename)), mode="a", newline="") as f:
                 writer = csv.writer(f, delimiter=",")
                 writer.writerow(current_theta)
 
-            
+           
         rospy.logwarn("[PP] Got path joint space.")
         self.last_joint = current_theta
 

@@ -136,8 +136,8 @@ class DummyCV:
 
     def calculate_needle_goal_pose(self):
         #FIXME actual needle goal pose calculation
-        needle_goal_pose  = np.array([ 0.70105746, -0.63595987 , 0.32260423 ,-0.71068701 ,-0.66031765,  0.24270266,  0.05867211, -0.39941914, -0.91488903 , 0.29202788,  0.14586335,  0.62162211])
-        
+        #needle_goal_pose  = np.array([ 0.70105746, -0.63595987 , 0.32260423 ,-0.71068701 ,-0.66031765,  0.24270266,  0.05867211, -0.39941914, -0.91488903 , 0.29202788,  0.14586335,  0.62162211])
+        needle_goal_pose = np.array([ 0.69257039,  0.34030423, -0.63603403,  0.69002358, -0.56955768,  0.44662234, -0.2102706,  -0.74819588, -0.62927673,  0.34591708,  0.06152325,  0.21930579])
         return needle_goal_pose
 
 
@@ -152,7 +152,7 @@ class DummyCV:
         self.wait_for_task_command()
 
         # Loop over all desired waypoints
-        for pose_id in range(2):
+        for pose_id in range(0):
             pose = self.pose_list[pose_id]
             # Send next desired goal pose
             self.at_desired_goal_pose   = False
