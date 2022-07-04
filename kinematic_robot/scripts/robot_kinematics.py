@@ -167,7 +167,7 @@ if __name__ == '__main__':
     
     kinematics  = robot_kinematics(debug=True)
 
-    theta_init  = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])    # Theta used to init iterative search (in degree)
+    theta_init  = np.array([-1.567332198396304, 0.0008033219139330115, 1.8795829186219215, -2.652852478428317, -0.7649761109567349, 1.9317156017688557, 0.18112329200997662])    # Theta used to init iterative search (in degree)
     theta_target = np.array([-1.5936105274902141, 0.5478572209508795, 2.85868600131448, -2.1916521760233776, -2.8638610953095265, 1.2092807170550028, 0.41151600447462666])    # Delta from init theta to target theta (in degree)
    
     A_current   = kinematics.get_pose_from_angles(theta_init)

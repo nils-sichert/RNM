@@ -17,16 +17,7 @@ class ProcessManager:
 
     def __init__(self):
 
-        # Flags
-        # /TODO delete if finally unnecessary
-        #self.s0_reset               = True     
-        #self.s1_cv_ready            = False
-        #self.s3_at_pre_insertion    = False
-        #self.s4_reverse_active      = False
-
-        # /TODO currenty placeholder, replace with approriate flags to signal CV node done status
-        self.s2_target_acquired     = False	
-        
+        # Flags      
         self.goal_pose_js_filename  = None
 
         self.crr_goal_pose_id   = None
@@ -79,7 +70,7 @@ class ProcessManager:
         # Load ROS Parameter
         self.joint_state_topic  = rospy.get_param('/joint_state_topic', "/joint_states")
         self.joint_command_topic= rospy.get_param('/joint_command_topic', "/joint_position_example_controller_sim/joint_command")
-        self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.1)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
+        self.MOVEMENT_SPEED     = rospy.get_param('/movement_speed', 0.15)/1000 # speed of robot endeffector in m/s; /1000 because of updaterate of 1000Hz
         self.INIT_POSE          = np.array([-0.21133107464982753, -0.7980917344176978, 0.5040977626328044, -2.1988260275772613, -0.06275970955855316, 1.4630513990722382, 0.9288285106498062])
              
         # ROS Helper/ Debuging
@@ -101,7 +92,8 @@ class ProcessManager:
         rospy.logwarn('[PM] Init finished')
 
     # MISC
-    def calculate_goal_pose_from_position(goal_position, omega_x = 0, omega_y = 0, omega_z = 0, vec_mat_init = None, vec_mat_camera = None):
+    def calculate_goal_pose_from_position(self, omega_x = 0, omega_y = 0, omega_z = 0, vec_mat_init = None, vec_mat_camera = None):
+        goal_position = self.needle_goal_pose
         rot_mat_x = np.array([  [1,0,0],
                                 [0,np.cos(omega_x), -np.sin(omega_x)],
                                 [0,np.sin(omega_x), np.cos(omega_x)]])
@@ -113,14 +105,13 @@ class ProcessManager:
                                 [0,0,1]])
         rot = np.matmul(np.matmul(rot_mat_x, rot_mat_y),rot_mat_z)
         A = np.append(rot, goal_position)
+        A = [ 0.69257039,  0.34030423, -0.63603403,  0.69002358, -0.56955768,  0.44662234, -0.2102706,  -0.74819588, -0.62927673,  0.34591708,  0.06152325,  0.21930579]
         return A
 
     # Callbacks
     def callback_goal_pose_js(self, msg : Float64MultiArray):
         ''' Callback function for the goal_pose_js topic. Stores current goal pose in object variable 
-            and sets the s2_target_acquired flag = True 
         '''
-        self.s2_target_acquired     = False
         self.goal_pose_js           = msg.data[0:-1]
         self.crr_goal_pose_id       = int(msg.data[-1])
         rospy.logwarn("[PM] Got Goal_Pose_JS with ID:" + str(self.crr_goal_pose_id)) 
@@ -129,8 +120,6 @@ class ProcessManager:
         ''' Callback function for the target pose of the needle containing a location (x,y,z) and 
             a roatation matrice (R); position[0:9] = Rotation & position [9:12] = position
         '''
-       
-        self.s2_target_acquired     = True
         self.needle_goal_pose = msg.data
     
     def callback_task_finished(self, msg : String):
@@ -358,7 +347,8 @@ class ProcessManager:
             # S6 Move to pre-insertion pose--------------------------------------------------------
             # Move robot to pre-insertion pose (blocking)
             if self.is_in_state('s5_pre_insertion'):
-                motion_done = self.motion_manager.move_start2preinsertion(self.needle_goal_pose, self.MOVEMENT_SPEED) 
+                target_pose = self.calculate_goal_pose_from_position()
+                motion_done = self.motion_manager.move_start2preinsertion(target_pose, self.MOVEMENT_SPEED) 
                 
                 # Exit state - when robot at pre insertion pose
                 if motion_done:
