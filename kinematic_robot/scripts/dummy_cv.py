@@ -172,7 +172,7 @@ class DummyCV:
         self.publish_needle_goal_pose(self.calculate_needle_goal_pose())
 
         # Signal finished calibration/registrtation to start 
-        self.publish_task_finished(self.TASKFIN_camera_calibration) #TODO finish Publisher has to be implemented
+        self.publish_task_finished() #TODO finish Publisher has to be implemented
 
 
 if __name__ == '__main__':

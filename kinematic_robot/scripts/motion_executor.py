@@ -127,7 +127,7 @@ class MotionExecutor:
         """
         rospy.logwarn("[ME] Published all Joints.")
     
-    def control_movement_err(self, goal_pose, max_err=5e-3):
+    def control_movement_err(self, goal_pose, max_err=1e-2):
         diff = np.array(goal_pose)-np.array(self.current_joint_state)
         err = np.abs(diff).max() 
         if err >= max_err:
