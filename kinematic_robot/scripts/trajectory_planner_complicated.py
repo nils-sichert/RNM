@@ -248,7 +248,7 @@ class Trajectory:
         self.register_segment(poly_coef, duration, last_p, last_p, True)
 
 
-class TrajectoryPlanner: 
+class TrajectoryPlannerComplicated: 
     ''' Takes in a list of joint positions "waypoints" and returns a list of 1kHz joint commands.
     '''
 
@@ -1253,23 +1253,13 @@ class TrajectoryPlanner:
         
 
 
-
-
-
 # /TODO: Quintic interpolation for slower joints
-# DONE: Rename 4segements to something better
-# /TODO: package max_vel, max_acc, max_jrk in function signatures to something better
-# /TODO: Include alpha factor in get_waypoint_parameters
-# /TODO: Include alpha factor in get_trajectory
-# /TODO: Fix velocity jumps
-#   /DONE: Precompute max velocities and min durations
-# DONE: Validate get_sequence_alpha function
-# DONE: alpha_marker in plot_duration_vs_alpha doesnt work as intended
 
-select  = 4
-profiler_on = True
+if __name__ == '__main__':
+    select  = 3
+
 # Test create_point_to_point_traj
-if __name__ == '__main__' and select == 4:
+if __name__ == '__main__' and select == 3:
 
     # Init
     limits  = { "q_pos_max" : [ 2.8973, 1.7628, 2.8973,-0.0698, 2.8973, 3.7525, 2.8973],
@@ -1285,11 +1275,10 @@ if __name__ == '__main__' and select == 4:
     wp1         = waypoints[0]
     wp2         = waypoints[1]
 
-    trajectory_planer = TrajectoryPlanner(limits, 7)
+    trajectory_planer = TrajectoryPlannerComplicated(limits, 7)
     trajectory_planer.create_point_to_point_traj(wp1, wp2, 'test_create_p2p_traj.csv')
     trajectory_planer.plot_all_trajectories()
     a = 1
-
 
 # Test get_trajectory
 if __name__ == '__main__' and select == 0:
@@ -1318,7 +1307,7 @@ if __name__ == '__main__' and select == 0:
     max_vel_l = limits['q_vel_max']
 
     waypoints_t         = np.transpose(waypoints)
-    trajectory_planer   = TrajectoryPlanner(limits, 7, safety_factor=1, safety_margin=0)
+    trajectory_planer   = TrajectoryPlannerComplicated(limits, 7, safety_factor=1, safety_margin=0)
 
     num_joints  = waypoints_t.shape[0]
     num_wp      = waypoints_t.shape[1]
@@ -1360,7 +1349,7 @@ if __name__ == '__main__' and select == 1:
     for key in keys:
         limits[key] = np.rad2deg(limits[key])
 
-    trajectory_planer   = TrajectoryPlanner(limits, safety_factor=1, safety_margin=0)
+    trajectory_planer   = TrajectoryPlannerComplicated(limits, safety_factor=1, safety_margin=0)
 
     # Settings
     waypoints_t = np.transpose(waypoints)
@@ -1406,7 +1395,7 @@ if __name__ == '__main__' and select == 2:
     for key in keys:
         limits[key] = np.rad2deg(limits[key])
 
-    trajectory_planer   = TrajectoryPlanner(limits, safety_factor=1, safety_margin=0)
+    trajectory_planer   = TrajectoryPlannerComplicated(limits, safety_factor=1, safety_margin=0)
 
     # Settings
     waypoints_t = np.transpose(waypoints)

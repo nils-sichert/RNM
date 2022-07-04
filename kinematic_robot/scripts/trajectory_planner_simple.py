@@ -5,6 +5,7 @@ import csv
 import os
 from tqdm import tqdm
 from robot_kinematics import robot_kinematics
+from trajectory_planner_complicated import TrajectoryPlannerComplicated
 # FIXME eine Zeile zu viel, dividieren durch 0 unterbinden, nan bei gleicher Position?
 
 class trajectory_planner_simple:
@@ -13,10 +14,19 @@ class trajectory_planner_simple:
                 movement_speed (float): Movement speed for end effector [m/s] TODO: is that correct?
         '''
         self.max_joint_vel   = max_joint_vel    # [rad/s] actual max is 2.1750
+        self.limits  = {"q_pos_max" : [ 2.8973, 1.7628, 2.8973,-0.0698, 2.8973, 3.7525, 2.8973],
+                        "q_pos_min" : [-2.8973,-1.7628,-2.8973,-3.0718,-2.8973,-0.0175,-2.8973],
+                        "q_vel_max" : [ 2.1750,	2.1750,	2.1750,	2.1750, 2.6100, 2.6100, 2.6100],
+                        "q_acc_max" : [     15,    7.5,     10,   12.5,     15,     20,     20],
+                        "q_jrk_max" : [   7500,   3750,   5000,   6250,   7500,  10000,  10000],
+                        "p_vel_max" :   1.7000,
+                        "p_acc_max" :  13.0000,
+                        "p_jrk_max" : 6500.000 }
 
         # Instances
         self.robot_kinematics = robot_kinematics
-
+        self.TPC    = TrajectoryPlannerComplicated(self.limits, 7)
+        
     def create_point_to_point_traj(self, start_pose, end_pose, MOVEMENT_SPEED, file_input_waypoints, file_output_trajectory,):
         ''' Wraps create_simple_trajectory with auto waypoint file generation, such that a simple 
             point to point trajectory can easily be realised. A directory and file name of the 
@@ -39,7 +49,10 @@ class trajectory_planner_simple:
             writer.writerow(end_pose)
 
         # Create point 2 point trajectory
-        self.create_simple_trajectory_JS(file_input_waypoints, file_output_trajectory)
+        self.TPC.create_point_to_point_traj(start_pose, end_pose, file_output_trajectory)       # /TODO confirm working properly
+        rospy.logwarn(f'[TPc] Generated padded trajectory in file {file_output_trajectory}')
+
+        #self.create_simple_trajectory_JS(file_input_waypoints, file_output_trajectory)
         
         return
 
