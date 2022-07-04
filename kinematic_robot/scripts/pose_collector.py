@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 
+
+
+
+
+from std_msgs.msg import Header
+from random import randint
+
 import rospy
 import cv2 as cv
 import sys
@@ -12,6 +19,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import numpy as np
 from numpy.linalg import inv
 import os
+import pcl
 import time
 import ctypes
 import struct
@@ -26,16 +34,15 @@ class pose_collector():
 
     def __init__(self):
         # Command to grab pointcloud manually with terminal
-        # rosrun pcl_ros pointcloud_to_pcd input:=/points2
+        # rosrun pcl_ros pointcloud_to_pcd input:=/k4a/points2
         # rostopic pub /position_reached std_msgs/Bool True
 
 
-        self.MR_path_dataset = os.path.join(os.path.dirname(__file__), 'CV_model_registration_data/dataset001')
-        self.CC_path_dataset = os.path.join(os.path.dirname(__file__), 'calibration_datasets/dataset001')
+        self.MR_path_dataset = os.path.join(os.path.dirname(__file__), 'CV_model_registration_data/dataset004')
+        self.CC_path_dataset = os.path.join(os.path.dirname(__file__), 'CV_camera_calibration_data/dataset001')
 
         # Set this path to self.CC_path_dataset or self_MR_path_dataset
-        self.path_dataset = self.MR_path_dataset
-
+        self.path_dataset = self.CC_path_dataset
 
 
         self.node_name = "pose_collector"
@@ -53,9 +60,9 @@ class pose_collector():
         self.bridge = CvBridge()
 
         # Camera Setup
-        self.sub_rgb_frame          = rospy.Subscriber("/rgb/image_raw", Image, self.rgb_image_callback)
-        self.sub_ir_frame           = rospy.Subscriber("/ir/image_raw", Image, self.ir_image_callback)
-        self.sub_pc                 = rospy.Subscriber("/points2", PointCloud2, self.pc_callback)
+        self.sub_rgb_frame          = rospy.Subscriber("/k4a/rgb/image_raw", Image, self.rgb_image_callback)
+        self.sub_ir_frame           = rospy.Subscriber("/k4a/ir/image_raw", Image, self.ir_image_callback)
+       
   
 
         
@@ -66,9 +73,10 @@ class pose_collector():
         except CvBridgeError:
             print ("error bridging ROS Image-Message to OpenCV Image")
 
-    def pc_callback(self, ros_point_cloud : PointCloud2):
-        self.pc2 = PointCloud2()
-        self.pc2 = ros_point_cloud
+    # def pc_callback(self, ros_point_cloud : PointCloud2):
+    #     self.pointcloud = PointCloud2()
+    #     self.pointcloud = ros_point_cloud
+      
 
 
 
@@ -94,9 +102,7 @@ class pose_collector():
         cv.imwrite(self.path_dataset + "/ir_" + str(self.counter) + ".png", self.current_ir_frame)
         self.counter += 1 
 
-        #Saves Pointcloud in self.path_dataset
-        self.save_pointcloud2()
-        rospy.logwarn(f"[Pose Collector] Collected current_joints, saved rgb and ir image and PC2 with ID {self.counter}")
+        rospy.logwarn(f"[Pose Collector] Collected current_joints, saved rgb and ir image with ID {self.counter}")
 
     def save_collected_joint_list(self):
         self.collected_joint_list = np.array(self.collected_joint_list)
