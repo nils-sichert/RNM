@@ -88,7 +88,7 @@ class trajectory_planner_simple:
                     writer.writerow(sample_joint)
            
         
-        rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
+        rospy.logwarn(f'[TPs] Generated simple trajectory in file {file_output_trajectory}')
         return 
 
     def create_simple_trajectory_JS(self, file_input_waypoints, file_output_trajectory, max_joint_vel=2.1750/40000, initial_waypoint=None):
@@ -144,7 +144,7 @@ class trajectory_planner_simple:
                 for traj_point in traj_points:
                     writer.writerow(traj_point)     # /FIXME: writing in file can be done more efficiently
         
-        rospy.logwarn(f'[TJ_s] Generated simple trajectory in file {file_output_trajectory}')
+        rospy.logwarn(f'[TPs] Generated simple trajectory in file {file_output_trajectory}')
         return 
 
 # for test purposes
