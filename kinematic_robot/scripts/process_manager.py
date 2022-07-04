@@ -206,6 +206,20 @@ class ProcessManager:
         else:
             return False        
 
+    def calculate_goal_pose_from_position(self, goal_position, omega_x = 1, omega_y = 1, omega_z = 1):
+        rot_mat_x = np.array([  [1,0,0],
+                                [0,np.cos(omega_x), -np.sin(omega_x)],
+                                [0,np.sin(omega_x), np.cos(omega_x)]])
+        rot_mat_y = np.array([  [np.cos(omega_y),0,np.sin(omega_y)],
+                                [0,1,0],
+                                [-np.sin(omega_y),0,np.cos(omega_y)]])
+        rot_mat_z = np.array([  [np.cos(omega_z),-np.sin(omega_z), 0],
+                                [np.sin(omega_z), np.cos(omega_z), 0],
+                                [0,0,1]])
+        rot = np.matmul(np.matmul(rot_mat_x, rot_mat_y),rot_mat_z)
+        A = [rot,goal_position] #FIXMEform
+        return A
+
     def go_to_next_state(self):
         ''' Reads curr_state and sets next_state according to all_states 
             Then waits for user input to confirm next state or overrule

@@ -25,7 +25,7 @@ class trajectory_planner_simple:
 
         # Instances
         self.robot_kinematics = robot_kinematics
-        self.TPC    = TrajectoryPlannerComplicated(self.limits, num_joints=7, safety_factor=0.1)
+        self.TPC    = TrajectoryPlannerComplicated(self.limits, num_joints=7, safety_factor=0.01)
         
     def create_point_to_point_traj(self, start_pose, end_pose, MOVEMENT_SPEED, file_input_waypoints, file_output_trajectory,):
         ''' Wraps create_simple_trajectory with auto waypoint file generation, such that a simple 
