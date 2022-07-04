@@ -90,7 +90,7 @@ class ModelRegistration():
 
         msg = msg.data
         if msg == self.TASKCMD:
-            rospy.logwarn(f'[CC] Received correct start command "{msg}"')
+            rospy.logwarn(f'[MR] Received correct start command "{msg}"')
             self.start_task = True
 
     def is_topic_published(self, topic_name : str):
@@ -124,9 +124,8 @@ class ModelRegistration():
         msg.data    = needle_point
 
         self.pub_needle_goal_pose.publish(msg)
-       
-
-        rospy.logwarn(f"[CC] Send new goal_pose_js with ID {pose_id}")
+        # TODO: Store in fila on disk
+        rospy.logwarn(f"[MR] Send new needle_goal_pose")
     
     ################### generating a mesh on the skeleton ########################
     def mesh(self):
@@ -234,7 +233,7 @@ class ModelRegistration():
             self.goal_point_in_target_frame = np.dot(self.result_icp.transformation, self.goal_point_column)
             print(self.goal_point_in_target_frame)
 
-    def main(self):
+    def main_process(self):
 
         # Load Joint List For Goal Positions
         joint_list = np.load(self.joint_list_path)
@@ -257,12 +256,12 @@ class ModelRegistration():
                 self.joint_list_pos += 1
 
                 #Collect Point Cloud in Realtime (at desired position)
-            
+
 
                 # Creating Source Target from File
                 self.prepare_dataset(self.voxel_size)
                 
-                rospy.logwarn('[MR] Prepared Pointclouds')
+                rospy.logwarn('[MR] Pointclouds Prepared')
 
                 # Get self.result_fast
                 self.execute_fast_global_registration()
@@ -310,8 +309,9 @@ class ModelRegistration():
 def main(args):       
     try:
         model_registration = ModelRegistration()
-        model_registration.main()
+        model_registration.main_process()
         rospy.spin()
+
     except KeyboardInterrupt:
         rospy.logwarn("[MR] Shutting down vision node.")
     
