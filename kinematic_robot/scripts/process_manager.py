@@ -245,7 +245,7 @@ class ProcessManager:
         
         # Assign curr_state to next_state and continue PM
         self.curr_state = next_state
-        self.do_once_in_state = True
+        self.first_run_in_state = True
         rospy.logwarn(f'[PM] Go to state = {self.curr_state}')
 
 
@@ -277,7 +277,7 @@ class ProcessManager:
             # S2 Do camera calibration-------------------------------------------------------------
             # Start camera calibration, go to goal poses, wait for CC results (non blocking)
             if self.is_in_state('s2_camera_calibration'):
-                
+               
                 if self.is_first_run_in_state():
                     self.publish_task_command(self.TASKCMD_camera_calibration)
                 

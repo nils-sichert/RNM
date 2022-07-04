@@ -22,10 +22,6 @@ class CameraCalibration():
 
         rospy.logwarn('[CC] Init started...')
 
-        # Task command to start CC
-        self.task_start_flag    = False
-        self.task_start_command = "camera_calibration_start"
-        self.task_finished_command = "camera_calibration_finished"
         # Set To False If Calibration Shouldn't Be Visible In Window Frame
         self.visualize_calibration_process = True
         # Path For Calibration Results
@@ -175,7 +171,7 @@ class CameraCalibration():
             self.R_gripper2base.append(R_gtb)
             self.t_gripper2base.append(t_gtb)
 
-            rospy.logwarn(f"[CC]Collected data for frame with ID: {self.joint_list_pos}")
+            rospy.logwarn(f"[CC] Collected data for frame with ID: {self.joint_list_pos}")
       
     
     def rgb_ir_calibration(self):
@@ -246,7 +242,7 @@ class CameraCalibration():
 
         msg = msg.data
         if msg == self.TASKCMD:
-            rospy.logwarn(f'[dCV] Received correct start command "{msg}"')
+            rospy.logwarn(f'[CC] Received correct start command "{msg}"')
             self.start_task = True
 
     def is_topic_published(self, topic_name : str):
