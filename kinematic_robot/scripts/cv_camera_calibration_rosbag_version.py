@@ -284,7 +284,7 @@ class CameraCalibration():
         joint_list = np.load(self.joint_list_path)
         print("Len(joint_list)")
         print(len(joint_list))
-        print(joint_list[0])
+        
 
         # Wait until process_manager is ready
         rospy.logwarn('[CC] Waiting for PM task command...')
