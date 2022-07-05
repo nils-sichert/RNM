@@ -206,12 +206,8 @@ class CameraCalibration():
         ret_ir, cameraMatrix_ir, dist_ir, rvecs_ir, tvecs_ir = cv.calibrateCamera(self.objpoints, self.imgpoints_ir, self.frameSize_ir, None, None, flags=cv.CALIB_RATIONAL_MODEL)
 
         # Calibrate Stereo Camera: extrinsic parameters between RGB and IR camera
-        retStereo, cameraMatrix_stereo_rgb, dist_stereo_rgb, cameraMatrix_stereo_ir, dist_stereo_ir, self.rvec_stereo, self.tvec_stereo, essentialMatrix, fundamentalMatrix = cv.stereoCalibrate(self.objpoints, self.imgpoints_rgb, self.imgpoints_ir, cameraMatrix_rgb, dist_rgb, cameraMatrix_ir, dist_ir, None, flags = (cv.CALIB_FIX_INTRINSIC + cv.CALIB_RATIONAL_MODEL))
+        retStereo, cameraMatrix_stereo_rgb, dist_stereo_rgb, cameraMatrix_stereo_ir, dist_stereo_ir, self.rmat_stereo, self.tvec_stereo, essentialMatrix, fundamentalMatrix = cv.stereoCalibrate(self.objpoints, self.imgpoints_rgb, self.imgpoints_ir, cameraMatrix_rgb, dist_rgb, cameraMatrix_ir, dist_ir, None, flags = (cv.CALIB_FIX_INTRINSIC + cv.CALIB_RATIONAL_MODEL))
         rospy.logwarn("[CC] Calibrated RGB, IR and Stereo Camera successfully")
-        print(cameraMatrix_rgb)
-        print(dist_rgb)
-        print(cameraMatrix_ir)
-        print(dist_ir)
         self.save_calibration_results()
         
 
@@ -220,8 +216,10 @@ class CameraCalibration():
         np.save(self.result_path + "/t_gripper2base.npy", self.t_gripper2base)
         np.save(self.result_path + "/rmat_rgb.npy", self.rmat_rgb)
         np.save(self.result_path + "/tvecs_rgb.npy", self.tvecs_rgb)
-        np.save(self.result_path + "/rvec_stereo.npy", self.rvec_stereo)
+        np.save(self.result_path + "/rvec_stereo.npy", self.rmat_stereo)
         np.save(self.result_path + "/tvec_stereo.npy", self.tvec_stereo)
+        np.save(self.result_path + "/HM_rgb2ir", self.rmat_tvec_to_hm(self.rmat_stereo, self.tvec_stereo))
+        np.save(self.result_path + "/HM_ir2rgb.npy", inv(self.rmat_tvec_to_hm(self.rmat_stereo, self.tvec_stereo)))
         rospy.logwarn(f"[CC] Saved calibration result in {self.result_path}")
 
     # PM communication
