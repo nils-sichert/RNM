@@ -58,7 +58,7 @@ class CameraCalibration():
 
 
         # Give Feedback to PM
-        self.pub_task_finished.publish(self.TASKFIN)
+        self.publish_task_finished()
         rospy.logwarn('[HiE] Main process finished')
 
     def rmat_tvec_to_hm(self, rmat, tvec):
