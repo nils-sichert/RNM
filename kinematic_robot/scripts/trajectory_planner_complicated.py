@@ -958,6 +958,7 @@ class TrajectoryPlannerComplicated:
 
                 # self.plot_trajectory_waypoint(poly_coef, t, pos)
                 # self.plot_trajectory_waypoint_limits(poly_coef, t, pos, limits)
+                a = 1
 
             if debug:
                 self.plot_trajectory(joint_id)
@@ -1257,7 +1258,7 @@ class TrajectoryPlannerComplicated:
 # /TODO: Quintic interpolation for slower joints
 
 if __name__ == '__main__':
-    select  = 3
+    select  = 0
 
 # Test create_point_to_point_traj
 if __name__ == '__main__' and select == 3:
@@ -1293,11 +1294,8 @@ if __name__ == '__main__' and select == 0:
                 "p_acc_max" :  13.0000,
                 "p_jrk_max" : 6500.000 }
 
-    waypoints   = get_list_from_csv("", "waypoints_02.csv")
-    waypoints   = np.deg2rad(np.array(waypoints))
-
     # Waypoints here in degree (actually in radians)
-    waypoints   = get_list_from_csv("", "waypoints_02.csv")
+    waypoints   = get_list_from_csv("", "Path/waypoints_02.csv")
     waypoints   = np.deg2rad(np.array(waypoints))
 
     # Convert limits to degree, for easier reading
@@ -1315,18 +1313,20 @@ if __name__ == '__main__' and select == 0:
     
 
     velocities_man = []
+    alphas_man     = []
     for i in range(num_joints):
         max_vel = max_vel_l[i]
         #velocities_man.append([0, max_vel, max_vel, 0, -max_vel, -max_vel, 0])      # Rise and fall
         #velocities_man.append([max_vel, -max_vel, -max_vel, max_vel, -max_vel, 0])         # Oscilate
         #velocities_man.append([0, max_vel, max_vel, max_vel, 0, -max_vel, -max_vel, 0])
-        velocities_man.append([0,  max_vel, max_vel, 0, -max_vel, -max_vel, 0])  
+        velocities_man.append([0,  max_vel, max_vel, 0, -max_vel, -max_vel, 0])
+        alphas_man.append([1, 1, 1, 1, 1, 1, 1, 1])
         
     velocities_man  = np.array(velocities_man)
-    alphas_man      = np.array([[1, 1, 1, 1, 1, 1, 1, 1]])
+    alphas_man      = np.array(alphas_man)
 
     alphas, adjust_vel, _   = trajectory_planer.get_waypoint_parameters(waypoints_t, velocities_man, sync_joints=True, debug=False)
-    traj_all                = trajectory_planer.get_trajectories(waypoints_t, adjust_vel, alphas)
+    traj_all                = trajectory_planer.get_trajectories(waypoints_t, adjust_vel, alphas_man)
     trajectory_planer.plot_trajectory(0)
 
 # Explore duration to og_v1 and og_v2 relationship 
