@@ -16,7 +16,7 @@ class path_planner:
     def calculate_path(self, current_joint_state, goal_pose, max_dist_between_waypoints_preinsertion, max_dist_between_waypoints_insertion, filename_path_preinsertion_cartesian, filename_path_insertion_cartesian, filename_path_preinsertion_joint_space, filename_path_insertion_joint_space):
         #TODO if/else! 
         current_pose = self.robot_kinematics.get_pose_from_angles(current_joint_state)
-        intersection_pose = self.calculate_intersection(goal_pose)
+        intersection_pose, target_pose = self.calculate_intersection(goal_pose)
         
         # Calculate path from current pose to intersection pose. Do this in one step
         self.clean_path_list_cartesian(filename_path_preinsertion_cartesian, current_pose, intersection_pose)
@@ -24,7 +24,7 @@ class path_planner:
         self.calculate_path_list_jointspace(current_joint_state, max_dist_between_waypoints_preinsertion, path_list_preinsertion, filename_path_preinsertion_joint_space)
 
         # Calculate path from current pose (should be intersection pos) to target pose. This should be done in smaller step sizes, but with static rotation
-        self.clean_path_list_cartesian(filename_path_insertion_cartesian, self.robot_kinematics.get_pose_from_angles(self.last_joint), goal_pose)
+        self.clean_path_list_cartesian(filename_path_insertion_cartesian, self.robot_kinematics.get_pose_from_angles(self.last_joint), target_pose)
         path_list_insertion = self.get_path_list_cartesian(filename_path_insertion_cartesian)
         self.calculate_path_list_jointspace(self.last_joint, max_dist_between_waypoints_insertion, path_list_insertion, filename_path_insertion_joint_space, const_rot=True)
 
@@ -59,7 +59,7 @@ class path_planner:
         
 
         # Needle offset
-        needle_offset = [0, 0, 0]    # In end-effector frame
+        needle_offset = [0, 0, 0]    # In end-effector frame 
 
         # TODO make x and y depanden on scelleton angle
         x_shift = 0.0       # +x towards hallway
@@ -76,14 +76,16 @@ class path_planner:
 
         target_point    = np.array(goal_pose[9:])
         insert_point    = target_point + [x_shift, y_shift, z_shift]
-
         insert_dir      = target_point - insert_point                   # Insertion direction
-        insert_dir      = insert_dir / np.linalg.norm(insert_dir)
+        n = np.linalg.norm(needle_offset)/np.linalg.norm(insert_dir)
+        insert_point_offset = target_point - (1+n)*insert_dir
+        target_point_offset = target_point - n * insert_dir
+        insert_dir_norm      = insert_dir / np.linalg.norm(insert_dir)
         needle_axis     = [0, 0, 1]
 
         # According to https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d/897677#897677
-        v = np.cross(insert_dir, needle_axis)
-        c = np.dot(insert_dir, needle_axis)
+        v = np.cross(insert_dir_norm, needle_axis)
+        c = np.dot(insert_dir_norm, needle_axis)
         
         v_cross = np.array([[    0,-v[2],  v[1]],
                             [ v[2],    0, -v[0]],
@@ -94,9 +96,10 @@ class path_planner:
         needle_offset_rot         = np.matmul(rot_mat, needle_offset)   # TODO: confirm order
         insert_point_offsetted = insert_point + needle_offset_rot
 
-        insertion_pose  = np.append(rot_mat, insert_point_offsetted)
-
-        return insertion_pose
+        insertion_pose  = np.append(rot_mat, insert_point_offset)
+        target_pose = np.append(rot_mat, target_point_offset)
+        rospy.logwarn("interstion pose: "+ str(insertion_pose))
+        return insertion_pose, target_pose
 
         offset_insection = np.array([0,0,0]).reshape((3,1))
         pos_target = np.array(goal_pose[9:]).reshape((3,1))

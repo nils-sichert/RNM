@@ -95,8 +95,8 @@ class MotionManager:
         return True
 
     def move_target2init_pose(self, MOVEMENT_SPEED): # TODO need to be debugged!
-        self.motion_executor.run_reversed(self.filename_trajectory_preinsertion, self.get_current_pose(), MOVEMENT_SPEED)
         self.motion_executor.run_reversed(self.filename_trajectory_insertion, self.get_current_pose(), MOVEMENT_SPEED)
+        self.motion_executor.run_reversed(self.filename_trajectory_preinsertion, self.get_current_pose(), MOVEMENT_SPEED)
         return True
 
     def get_max_dist_between_waypoints_preinsertion(self):
