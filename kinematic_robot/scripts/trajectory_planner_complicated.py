@@ -777,7 +777,7 @@ class TrajectoryPlannerComplicated:
         for joint_id, joint_pos in enumerate(waypoints_t):
             for k, wp_id in enumerate(joint_pos):
                 if wp_id < self.qlimit_pos_min[joint_id] or wp_id > self.qlimit_pos_max[joint_id]:
-                    assert 0, f"Waypoint {k} of joint {joint_id} out of bounds: {wp_id:.3f}, bounds are  q_min_pos: {self.qlimit_pos_min[joint_id]:.3f}, q_max_pos: {self.qlimit_pos_max[joint_id]:.3f} "
+                    print(f"Waypoint {k} of joint {joint_id} out of bounds: {wp_id:.3f}, bounds are  q_min_pos: {self.qlimit_pos_min[joint_id]:.3f}, q_max_pos: {self.qlimit_pos_max[joint_id]:.3f} ")
 
         ''' Notes:
             - No two consecutive waypoints can have 0 velocity
