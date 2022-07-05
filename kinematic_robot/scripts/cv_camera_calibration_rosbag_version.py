@@ -2,7 +2,7 @@
 import os
 import sys
 import time
-import cv2
+import cv2 
 import cv2 as cv
 import numpy as np
 import rospy
@@ -96,6 +96,8 @@ class CameraCalibration():
         rospy.logwarn("[CC] Waiting for image topics...")
         time.sleep(1)
 
+
+
     def joint_to_dk_to_hm(self, joints, inv: bool):
         """return R_mat, t_vec, pose_hm"""
         temp = [0, 0, 0 ,1]
@@ -118,22 +120,17 @@ class CameraCalibration():
         pose_hm = np.r_[pose_3x4, np.reshape(temp, (1,4))]
         return pose_hm
 
+
     def joint_state_callback(self, joint_state : JointState):
         self.current_joint_state = joint_state.position
 
     # Store Current RGB Frame In Class Variable
     def rgb_image_callback(self, ros_rgb_img):
-        try:
-            self.current_rgb_frame = self.bridge.imgmsg_to_cv2(ros_rgb_img, "bgr8")
-        except CvBridgeError:
-            print ("error bridging ROS Image-Message to OpenCV Image")
+        a =1
     
     # Store Current IR Frame In Class Variable
     def ir_image_callback(self, ros_ir_img):
-        try:
-            self.current_ir_frame = self.bridge.imgmsg_to_cv2(ros_ir_img, "bgr8")   
-        except CvBridgeError:
-            print ("error bridging ROS Image-Message to OpenCV Image")
+        a = 2
 
 
     def draw_image_points(self, window_name, frame, corners, ret):
@@ -207,6 +204,7 @@ class CameraCalibration():
 
         # Calibrate Stereo Camera: extrinsic parameters between RGB and IR camera
         retStereo, cameraMatrix_stereo_rgb, dist_stereo_rgb, cameraMatrix_stereo_ir, dist_stereo_ir, self.rmat_stereo, self.tvec_stereo, essentialMatrix, fundamentalMatrix = cv.stereoCalibrate(self.objpoints, self.imgpoints_rgb, self.imgpoints_ir, cameraMatrix_rgb, dist_rgb, cameraMatrix_ir, dist_ir, None, flags = (cv.CALIB_FIX_INTRINSIC + cv.CALIB_RATIONAL_MODEL))
+        
         rospy.logwarn("[CC] Calibrated RGB, IR and Stereo Camera successfully")
         self.reprojection_error("RGB Camera", self.objpoints, self.imgpoints_rgb, self.rvecs_rgb, self.tvecs_rgb, cameraMatrix_rgb, dist_rgb)
         self.save_calibration_results()
@@ -289,6 +287,7 @@ class CameraCalibration():
         rospy.logwarn(f"[CC] Mean_error (Norm L2) for {name} is: {mean_error}")
 
 
+
     def main_calibration(self):
 
         rospy.logwarn('[CC] Starting main calibration...')
@@ -297,6 +296,7 @@ class CameraCalibration():
         joint_list = np.load(self.joint_list_path)
         print("Len(joint_list)")
         print(len(joint_list))
+        
 
         # Wait until process_manager is ready
         rospy.logwarn('[CC] Waiting for PM task command...')
@@ -306,6 +306,13 @@ class CameraCalibration():
         self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
 
         while self.joint_list_pos < len(joint_list):
+
+            # TODO Just for Rosbag pre recorded data loading
+            self.at_desired_goal_pose = True
+            self.current_joint_state =joint_list[self.joint_list_pos]
+            self.current_rgb_frame = cv.imread("/home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/CV_camera_calibration_data/dataset002/rgb_" + str(self.joint_list_pos) + ".png")
+            self.current_ir_frame = cv.imread("/home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/CV_camera_calibration_data/dataset002/ir_" + str(self.joint_list_pos) + ".png")
+            ########################################################################################################################
 
             self.create_and_draw_image_points(self.visualize_calibration_process)
             
@@ -329,7 +336,7 @@ class CameraCalibration():
 
     def cleanup(self):
         rospy.logwarn("[CC] Shutting down vision node.")
-        cv2.destroyAllWindows()   
+        cv.destroyAllWindows()   
 
 
 def main(args):       
