@@ -2,7 +2,7 @@
 import os
 import sys
 import time
-
+import cv2
 import cv2 as cv
 import numpy as np
 import rospy
@@ -26,7 +26,7 @@ class CameraCalibration():
         # Path For Calibration Results
         self.result_path        = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_results')  
         # Path To Read-In Desired Joint List
-        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset001/collected_joint_list2.npy')  
+        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset001/collected_joint_list.npy')  
         # Joint State Topic
         self.joint_state_topic  = rospy.get_param('/joint_state_topic', '/joint_states')
         # Image topics
