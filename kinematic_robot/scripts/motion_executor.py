@@ -62,12 +62,13 @@ class MotionExecutor:
 
         # get target cartesian robot state
         start_pose_cartesian = self.robot_kinematics.get_pose_from_angles(list[0])     # /FIXME confirm correction and error handling if List is empty
-        delta_pose = start_pose_cartesian - current_pose_cartesian
+        delta_pose_cartesian = start_pose_cartesian - current_pose_cartesian
+        delta_pose = list[0] - current_pose
         err_tol = 1e-2
         max_delta_pose = np.abs(delta_pose).max()
         if max_delta_pose > err_tol:
             #FIXME change into control of joint movements
-            rospy.logwarn("[ME] Robot NOT at planned start pose")  
+            #rospy.logwarn("[ME] Robot NOT at planned start pose")  
             # calculate distance between cartesian coordinates of current and start position
             steps           = int(max_delta_pose / MOVEMENT_SPEED)
             delta_joints_per_step = np.abs(delta_pose).max() / steps
