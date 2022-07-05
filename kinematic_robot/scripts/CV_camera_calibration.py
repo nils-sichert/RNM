@@ -61,7 +61,7 @@ class CameraCalibration():
         # Setup Checkerboard Parameters
         self.criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)  # termination criteria
         self.chessboard_size = (8,5)  # Create chessboard and generate object points
-        self.square_size = 40 # Checkerboard Field Size in Millimeter
+        self.square_size = 0.04 # Checkerboard Field Size in Millimeter
 
         # Create Object Points in 3D Meshgrid Space And Covert Them In Desired Array Shape Like (0,0,0), (0,0,40), (0,0,80....
         self.objp = np.zeros((self.chessboard_size[0] * self.chessboard_size[1], 3), np.float32)
@@ -96,7 +96,27 @@ class CameraCalibration():
         rospy.logwarn("[CC] Waiting for image topics...")
         time.sleep(1)
 
+    def joint_to_dk_to_hm(self, joints, inv: bool):
+        """return R_mat, t_vec, pose_hm"""
+        temp = [0, 0, 0 ,1]
 
+        pose_list = self.kinematics.get_pose_from_angles(joints)
+        pose_3x4 = np.reshape(pose_list, (4,3)).T
+        pose_hm = np.r_[pose_3x4, np.reshape(temp, (1,4))]
+        if inv == True:
+            inv(pose_hm)
+        else:
+            R_mat = pose_hm[0:3, 0:3]
+            t_vec = pose_hm[0:3, 3:4]
+        return R_mat, t_vec, pose_hm
+
+    def rmat_tvec_to_hm(self, rmat, tvec):
+        """return pose_hm"""
+        temp = [0, 0, 0 ,1]
+
+        pose_3x4 = np.c_[rmat, np.reshape(tvec, (3,1))]
+        pose_hm = np.r_[pose_3x4, np.reshape(temp, (1,4))]
+        return pose_hm
 
     def joint_state_callback(self, joint_state : JointState):
         self.current_joint_state = joint_state.position
@@ -162,11 +182,8 @@ class CameraCalibration():
             
             # Get joint angles of this frame and calculate the pose to extract
             # Rotational matrix and translation vector
-           
-            current_pose = self.kinematics.get_pose_from_angles(self.current_joint_state)
-            current_pose = np.reshape(current_pose, (4,3)).T
-            R_gtb = current_pose[0:3, 0:3]
-            t_gtb = current_pose[0:3, 3:4]
+
+            R_gtb, t_gtb, pose_hm = self.joint_to_dk_to_hm(self.current_joint_state, False)
             self.R_gripper2base.append(R_gtb)
             self.t_gripper2base.append(t_gtb)
 
