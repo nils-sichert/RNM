@@ -26,7 +26,7 @@ class CameraCalibration():
         # Path For Calibration Results
         self.result_path        = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_results')  
         # Path To Read-In Desired Joint List
-        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset002/collected_joint_list.npy')  
+        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset003/collected_joint_list.npy')  
         # Joint State Topic
         self.joint_state_topic  = rospy.get_param('/joint_state_topic', '/joint_states')
         # Image topics
@@ -310,8 +310,8 @@ class CameraCalibration():
             # TODO Just for Rosbag pre recorded data loading
             self.at_desired_goal_pose = True
             self.current_joint_state =joint_list[self.joint_list_pos]
-            self.current_rgb_frame = cv.imread("/home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/CV_camera_calibration_data/dataset002/rgb_" + str(self.joint_list_pos) + ".png")
-            self.current_ir_frame = cv.imread("/home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/CV_camera_calibration_data/dataset002/ir_" + str(self.joint_list_pos) + ".png")
+            self.current_rgb_frame = cv.imread("/home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/CV_camera_calibration_data/dataset003/rgb_" + str(self.joint_list_pos) + ".png")
+            self.current_ir_frame = cv.imread("/home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/CV_camera_calibration_data/dataset003/ir_" + str(self.joint_list_pos) + ".png")
             ########################################################################################################################
 
             self.create_and_draw_image_points(self.visualize_calibration_process)
