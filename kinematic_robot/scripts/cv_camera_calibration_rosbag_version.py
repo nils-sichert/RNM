@@ -193,9 +193,9 @@ class CameraCalibration():
             It also calculates the extrinsic parameter between RGB and IR camera"""
 
         # Calibrate RGB Single Camera
-        ret_rgb, cameraMatrix_rgb, dist_rgb, rvecs_rgb, self.tvecs_rgb = cv.calibrateCamera(self.objpoints, self.imgpoints_rgb, self.frameSize_rgb, None, None, flags=cv.CALIB_RATIONAL_MODEL)
+        ret_rgb, cameraMatrix_rgb, dist_rgb, self.rvecs_rgb, self.tvecs_rgb = cv.calibrateCamera(self.objpoints, self.imgpoints_rgb, self.frameSize_rgb, None, None, flags=cv.CALIB_RATIONAL_MODEL)
         # Convert rvecs To Rotation Matrix For Hand In Eye
-        for rvec in rvecs_rgb:
+        for rvec in self.rvecs_rgb:
             rmat, jacobian = cv.Rodrigues(rvec)
             self.rmat_rgb.append(rmat) 
       
@@ -206,6 +206,7 @@ class CameraCalibration():
         retStereo, cameraMatrix_stereo_rgb, dist_stereo_rgb, cameraMatrix_stereo_ir, dist_stereo_ir, self.rmat_stereo, self.tvec_stereo, essentialMatrix, fundamentalMatrix = cv.stereoCalibrate(self.objpoints, self.imgpoints_rgb, self.imgpoints_ir, cameraMatrix_rgb, dist_rgb, cameraMatrix_ir, dist_ir, None, flags = (cv.CALIB_FIX_INTRINSIC + cv.CALIB_RATIONAL_MODEL))
         
         rospy.logwarn("[CC] Calibrated RGB, IR and Stereo Camera successfully")
+        self.reprojection_error("RGB Camera", self.objpoints, self.imgpoints_rgb, self.rvecs_rgb, self.tvecs_rgb, cameraMatrix_rgb, dist_rgb)
         self.save_calibration_results()
         
 
@@ -274,6 +275,17 @@ class CameraCalibration():
         msg.data = self.TASKFIN
         self.pub_task_finished.publish(msg)
         return
+
+    def reprojection_error(self, name : str, objpoints, imgpoints, rvecs, tvecs, cameraMatrix, dist):
+        # Reprojection Error
+        mean_error = 0
+
+        for i in range(len(objpoints)):
+            imgpoints2, _ = cv.projectPoints(objpoints[i], rvecs[i], tvecs[i], cameraMatrix, dist)
+            error = cv.norm(imgpoints[i], imgpoints2, cv.NORM_L2)/len(imgpoints2)
+            mean_error += error
+        rospy.logwarn(f"[CC] Mean_error (Norm L2) for {name} is: {mean_error}")
+
 
 
     def main_calibration(self):
