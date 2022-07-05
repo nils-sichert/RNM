@@ -107,6 +107,8 @@ class ProcessManager:
         rot = np.matmul(np.matmul(rot_mat_x, rot_mat_y),rot_mat_z)
         A = np.append(rot, goal_position)
         '''
+
+        # Rotation data is indeed not usefull here
         A = np.array([0.56910864 ,-0.68027837 , 0.46188385, -0.78483952, -0.28187555,  0.55188142, -0.24523923, -0.67658518, -0.69432717,  0.29138331,  0.06223919,  0.23634959])
         return A
 

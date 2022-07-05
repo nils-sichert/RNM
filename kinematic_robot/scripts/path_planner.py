@@ -18,13 +18,15 @@ class path_planner:
         current_pose = self.robot_kinematics.get_pose_from_angles(current_joint_state)
         intersection_pose = self.calculate_intersection(goal_pose)
         
+        # Calculate path from current pose to intersection pose. Do this in one step
         self.clean_path_list_cartesian(filename_path_preinsertion_cartesian, current_pose, intersection_pose)
         path_list_preinsertion = self.get_path_list_cartesian(filename_path_preinsertion_cartesian) #FIXME Redundency !
         self.calculate_path_list_jointspace(current_joint_state, max_dist_between_waypoints_preinsertion, path_list_preinsertion, filename_path_preinsertion_joint_space)
 
+        # Calculate path from current pose (should be intersection pos) to target pose. This should be done in smaller step sizes, but with static rotation
         self.clean_path_list_cartesian(filename_path_insertion_cartesian, self.robot_kinematics.get_pose_from_angles(self.last_joint), goal_pose)
         path_list_insertion = self.get_path_list_cartesian(filename_path_insertion_cartesian)
-        self.calculate_path_list_jointspace(self.last_joint, max_dist_between_waypoints_insertion, path_list_insertion, filename_path_insertion_joint_space)
+        self.calculate_path_list_jointspace(self.last_joint, max_dist_between_waypoints_insertion, path_list_insertion, filename_path_insertion_joint_space, const_rot=True)
 
     def clean_path_list_cartesian(self, filename, start_pose, goal_pose):
         # TODO add IF load path do NOT execute this method else if calculate new path execute this before loading path list cartesian
@@ -50,9 +52,51 @@ class path_planner:
 
         return path_list
 
-    def calculate_intersection(self, goal_pose):
-        #TODO Controll Calculation!
-        #FIXME local Parameter from rospy params
+
+    def calculate_intersection(self, goal_pose, debug=False):
+        # /FIXME local Parameter from rospy params
+        # /TODO Confirm correct functionality       
+        
+
+        # Needle offset
+        needle_offset = [0, 0, 0.16]    # In end-effector frame
+
+        # TODO make x and y depanden on scelleton angle
+        x_shift = 0.0       # +x towards hallway
+        y_shift = 0.1      # +y towards desk
+        z_shift = 0.2       # +z towards ceiling
+
+        # For debug overwrite parameters
+        if debug:
+            goal_pose[9:] = [1,1,1]
+            x_shift = 1.0       # +x towards hallway
+            y_shift = 1.0      # +y towards desk
+            z_shift = 0.0       # +z towards ceiling
+            needle_offset = [0, 0, 0] 
+
+        target_point    = np.array(goal_pose[9:])
+        insert_point    = target_point + [x_shift, y_shift, z_shift]
+
+        insert_dir      = target_point - insert_point                   # Insertion direction
+        insert_dir      = insert_dir / np.linalg.norm(insert_dir)
+        needle_axis     = needle_offset / np.linalg.norm(needle_offset)
+
+        # According to https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d/897677#897677
+        v = np.cross(insert_dir, needle_axis)
+        c = np.dot(insert_dir, needle_axis)
+        
+        v_cross = np.array([[    0,-v[2],  v[1]],
+                            [ v[2],    0, -v[0]],
+                            [-v[1], v[0],     0]])
+
+        rot_mat = np.eye(3) + v_cross + np.linalg.matrix_power(v_cross, 2) / (1 + c)
+        
+        needle_offset_rot         = np.matmul(rot_mat, needle_offset)
+        insertion_point_offsetted = insert_point + needle_offset_rot
+
+        insertion_pose  = np.append(rot_mat, insertion_point_offsetted)
+
+        return insertion_pose
 
         offset_insection = np.array([0,0,0]).reshape((3,1))
         pos_target = np.array(goal_pose[9:]).reshape((3,1))
@@ -64,7 +108,7 @@ class path_planner:
         # normieren
         # Normalenvektoren bilden 
         # Stackoverflow 
-        return A_intersection
+        #return A_intersection
 
         pos_offset = np.matmul(rot_mat, offset_insection) 
 
@@ -85,24 +129,31 @@ class path_planner:
         
         return A_intersection
 
-    def calculate_path_list_jointspace(self, current_joint_state, max_dist_between_waypoints, input_path, output_filename):
+    def calculate_path_list_jointspace(self, current_joint_state, max_dist_between_waypoints, input_path, output_filename, const_rot=False):
         """
         method, that interpolates Joint Space into 1ms Step
         number of steps need to be calculated, e.g. calculating stepwidth with get_A and divide by max. movement per 1ms
+        const_rot (bool): Rotation stays the same (First rotation stays constant)
         """    
         current_pose = self.robot_kinematics.get_pose_from_angles(current_joint_state)
+        # Current pose should be equal (very similar) to the first path pose
+        assert np.array_equal(np.round(current_pose-input_path[0], 4), np.zeros(12)), "First pose is not the same as current pose"
+
         tmp_A_list = []
         # iterates over given waypoints and calculate nessesary number of additional waypoints to be below max. distance between waypoints
         for i in range(len(input_path)-1):
             #TODO Do not interpolate over roation
             next_pose = np.array(input_path[i+1])
-            delta_pose = next_pose - current_pose # TODO cartesian norm between x,y,z
-            tmp_dist = np.linalg.norm(delta_pose)
-            counter = int((tmp_dist// max_dist_between_waypoints)+1)
+            delta_pose = next_pose - current_pose  # TODO cartesian norm between x,y,z, DONE, plz confirm
+            tmp_dist = np.linalg.norm(delta_pose[9:12])
+            counter = int((tmp_dist // max_dist_between_waypoints) + 1)
 
         # intepolate between given waypoints with given max. distance between interpolated waypoints   
             for i in range(counter+1):
-                interpol_pose = current_pose + i/counter*delta_pose
+                if const_rot:
+                    interpol_pose = current_pose + i / counter * np.append(np.zeros(9), delta_pose[9:12])
+                else:
+                    interpol_pose = current_pose + i / counter * delta_pose
                 tmp_A_list.append(interpol_pose)
             
             current_pose = next_pose
@@ -115,6 +166,7 @@ class path_planner:
         with open((os.path.join(os.path.dirname(__file__),output_filename)), mode="a", newline="") as f:
                 writer = csv.writer(f, delimiter=",")
                 writer.writerow(current_theta)
+
         # calculate joint space for each A and write it into file
         for i in tqdm(range(len(tmp_A_list)-1), ncols=100 ):
             goal_pose = tmp_A_list [i+1]
@@ -143,12 +195,12 @@ if __name__ == '__main__':
     
     current_joint_state                     = [-7.455726072969071e-06, -3.5540748690721102e-06, -6.046157276173858e-06, -0.7851757638374179, 4.600804249577095e-06, 1.4001585464384902e-06, 1.013981160369326e-06]
     current_pose                            = [ 7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01  ,2.82213352e-01, -3.40555121e-06,  8.41024897e-01]
-    goal_pose                               = [7.07267526e-01, -5.96260536e-06 ,-7.06945999e-01 ,-1.09650444e-05, -1.00000000e+00 ,-2.53571628e-06 ,-7.06945999e-01 , 9.54512406e-06 ,-7.07267526e-01,  0.30874679,  0.24655161, 0.45860086]
+    goal_pose                               = np.array([0.56910864 ,-0.68027837 , 0.46188385, -0.78483952, -0.28187555,  0.55188142, -0.24523923, -0.67658518, -0.69432717,  0.29138331,  0.06223919,  0.23634959])
     max_dist_between_waypoints              = 0.01
     filename_path_preinsertion_cartesian    = "Path/calculated_path_preinsertion_cartesian.csv"
     filename_path_insertion_cartesian       = "Path/calculated_path_insertion_cartesian.csv"
     filename_path_preinsertion_joint_space  = "Path/calculated_path_preinsertion_jointspace.csv"
     filename_path_insertion_joint_space     = "Path/calculated_path_insertion_jointspace.csv"
   
-    path_planner.calculate_intersection(goal_pose)
+    path_planner.calculate_intersection(goal_pose, debug=True)
     #path_planner.calculate_target_path(current_joint_state, goal_pose, max_dist_between_waypoints, filename_path_preinsertion_cartesian, filename_path_insertion_cartesian, filename_path_preinsertion_joint_space, filename_path_insertion_joint_space)
