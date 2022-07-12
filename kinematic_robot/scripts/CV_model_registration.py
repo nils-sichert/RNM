@@ -9,22 +9,19 @@ from sensor_msgs.msg import Image, JointState, PointCloud2
 from std_msgs.msg import Float64MultiArray, Int16, String
 import os
 import time
-
+from robot_kinematics import robot_kinematics
 
 class ModelRegistration():
 
     def __init__(self):
-
-        #temp comment
-        # joint state dataset001 (-0.3837760589666534, -0.9570982191319702, -0.09547887552934779, -1.8819315434119188, 0.026096191945840848, 2.678227669855995, 0.7275825914452366)
-        # joint state dataset002 (0.2513670449047758, -1.3531158464924882, -0.16343294161688351, -2.3963478467766994, -0.027651678348580993, 2.685546017169854, 0.5202622859395462)
-        # joint state dataset003 (0.10648101795244204, -0.5325129005978491, -0.13972313721137586, -1.7850238601411241, -0.028194630339917627, 2.8181465023419947, 0.528756094048057)
 
        # Paths To load In Data
         self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/joint_list_MR.npy')  #TODO: Create joint_list_mr with pose collector
         self.stl_path = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/Skeleton_Target.stl')
         self.pcd_path = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/PCD_1.pcd') #TODO: Add PCD File Name or name it like this is pose collector
         self.cropped_pcd_path = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/cropped_PCD_1.ply')
+
+        self.kinematics = robot_kinematics()
 
         # Initialize ROS Specific Functions
         self.node_name = "mode_registration"
@@ -45,6 +42,10 @@ class ModelRegistration():
         self.at_desired_goal_pose = False
         self.joint_list_pos = 0
 
+        self.HM_cam2gripper= []
+        self.HM_ir2rgb=[]
+        self.HM_gripper2base=[]
+
         # Model Registration Data
 
         self.source = []    # For STL File
@@ -55,10 +56,21 @@ class ModelRegistration():
                             [-1, 0,  0,  0.00376681 ], # moved it cw 
                              [0, 0 ,-1,  0.14037132], #change in rotation
                              [0 ,0,   0,  1]])
-       
 
-   
+    
+    def joint_to_dk_to_hm(self, joints, inv: bool):
+        """return R_mat, t_vec, pose_hm"""
+        temp = [0, 0, 0 ,1]
 
+        pose_list = self.kinematics.get_pose_from_angles(joints)
+        pose_3x4 = np.reshape(pose_list, (4,3)).T
+        pose_hm = np.r_[pose_3x4, np.reshape(temp, (1,4))]
+        if inv == True:
+            inv(pose_hm)
+        else:
+            R_mat = pose_hm[0:3, 0:3]
+            t_vec = pose_hm[0:3, 3:4]
+        return R_mat, t_vec, pose_hm
 
 
  
@@ -227,6 +239,11 @@ class ModelRegistration():
             self.goal_pts= []
             self.goal_pts= self.goal_point.get_picked_points()  # shift+lmb to select target point
 
+    def target_point_in_base(self):
+        point= self.goal_point_in_target_frame @ self.HM_ir2rgb @ self.HM_cam2gripper @ self.HM_gripper2base
+        return point
+
+
     def stl_goal_point_to_target_frame(self):
 
             # Source Point Cloud to Array of Points
@@ -250,6 +267,12 @@ class ModelRegistration():
 
         # Publish First Goal Position by giving Joint List (7 Angles) and Joint List Position (Out of All)
         self.publish_desired_goal_pose(joint_list[self.joint_list_pos], self.joint_list_pos)
+
+        # Homogenous matrix import
+
+        self.HM_cam2gripper= np.load("/home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/CV_camera_calibration_results/HM_cam2gripper.npy")
+        self.HM_ir2rgb= np.load("/home/rnm/catkin_ws/src/RNM/kinematic_robot/scripts/CV_camera_calibration_results/HM_ir2rgb.npy")
+        self.HM_gripper2base= self.joint_to_dk_to_hm(joint_list[self.joint_list_pos],False)
 
 
         while self.joint_list_pos < 1:
@@ -291,13 +314,11 @@ class ModelRegistration():
                 # self.goal_point_in_target_frame
                 rospy.logwarn('[MR] Try to convert goal point to target frame')
                 self.stl_goal_point_to_target_frame()
-                rospy.logwarn('[MR] Converted goal point to target frame')
-
-                
+                rospy.logwarn('[MR] Converted goal point to target frame')       
     
         # target_frame_point to robot base_frame TODO: Do Transformation with hand in eye and direct kinematic gripper2base
-
-
+        tp_base =  self.target_point_in_base()
+        print("point after transformations", tp_base)
 
         # publish target point on topic
         self.publish_needle_goal_pose(self.goal_point_in_target_frame)  #TODO: Replace arg. by tracker point in base frame not Pointcloud Target frame
