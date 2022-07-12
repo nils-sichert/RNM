@@ -207,7 +207,7 @@ class CameraCalibration():
         
         rospy.logwarn("[CC] Calibrated RGB, IR and Stereo Camera successfully")
         self.reprojection_error("RGB Camera", self.objpoints, self.imgpoints_rgb, self.rvecs_rgb, self.tvecs_rgb, cameraMatrix_rgb, dist_rgb)
-        self.save_calibration_results()
+     #   self.save_calibration_results()
         
 
     def save_calibration_results(self):
@@ -217,8 +217,10 @@ class CameraCalibration():
         np.save(self.result_path + "/tvecs_rgb.npy", self.tvecs_rgb)
         np.save(self.result_path + "/rvec_stereo.npy", self.rmat_stereo)
         np.save(self.result_path + "/tvec_stereo.npy", self.tvec_stereo)
-        np.save(self.result_path + "/HM_rgb2ir", self.rmat_tvec_to_hm(self.rmat_stereo, self.tvec_stereo))
-        np.save(self.result_path + "/HM_ir2rgb.npy", inv(self.rmat_tvec_to_hm(self.rmat_stereo, self.tvec_stereo)))
+        HM_rgb2ir = self.rmat_tvec_to_hm(self.rmat_stereo, self.tvec_stereo)
+        np.save(self.result_path + "/HM_rgb2ir", HM_rgb2ir)
+        HM_ir2rgb = inv(self.rmat_tvec_to_hm(self.rmat_stereo, self.tvec_stereo))
+        np.save(self.result_path + "/HM_ir2rgb.npy", HM_ir2rgb)
         rospy.logwarn(f"[CC] Saved calibration result in {self.result_path}")
 
     # PM communication

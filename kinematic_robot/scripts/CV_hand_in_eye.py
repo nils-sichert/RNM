@@ -54,7 +54,7 @@ class CameraCalibration():
         self.R_cam2gripper, self.t_cam2gripper = cv.calibrateHandEye(self.R_gripper2base, self.t_gripper2base, self.rmat_rgb, self.tvecs_rgb, method = cv.CALIB_HAND_EYE_PARK)
         
         # Saves result of R- t and HM in CV_camera_calibration folder
-        self.save_result() 
+     #   self.save_result() 
 
 
         # Give Feedback to PM
