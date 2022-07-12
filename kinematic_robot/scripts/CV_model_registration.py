@@ -16,7 +16,7 @@ class ModelRegistration():
     def __init__(self):
 
        # Paths To load In Data
-        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/joint_list_MR.npy')  #TODO: Create joint_list_mr with pose collector
+        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/dataset010/collected_joint_list.npy')  #TODO: Create joint_list_mr with pose collector
         self.stl_path = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/Skeleton_Target.stl')
         self.pcd_path = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/PCD_1.pcd') #TODO: Add PCD File Name or name it like this is pose collector
         self.cropped_pcd_path = os.path.join(os.path.dirname(__file__),'CV_model_registration_data/cropped_PCD_1.ply')
@@ -24,7 +24,7 @@ class ModelRegistration():
         self.kinematics = robot_kinematics()
 
         # Initialize ROS Specific Functions
-        self.node_name = "mode_registration"
+        self.node_name = "model_registration"
         rospy.init_node(self.node_name)
 
         # Task Control and PM communication
@@ -77,7 +77,7 @@ class ModelRegistration():
     # PM communication
     def publish_desired_goal_pose(self, pose_js : np.array, pose_id : int):
         ''' Publihes current desired goal pose and current pose id using the goal_pose_js_pub.
-            Also sets the self.curr_pose_id to the id that is sent in the message.
+            Also sets the self.curr_pose_id to the id that is sent in the message
             Parameters:
                 pose_js (List): Current goal pose in joint space
                 pose_id (int): Current goal pose ID
