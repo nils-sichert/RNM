@@ -10,7 +10,7 @@ from std_msgs.msg import String
 from std_msgs.msg import Int16
 
 class DummyCV:
-    def __init__(self, pose_list_dir):
+    def __init__(self, pose_list_dir = 'Position/dummy_list.npy'):
 
         # ROS inits
         rospy.init_node('dummy_cv', anonymous=True)
@@ -152,7 +152,7 @@ class DummyCV:
         self.wait_for_task_command()
 
         # Loop over all desired waypoints
-        for pose_id in range(0):
+        for pose_id in range(3):
             pose = self.pose_list[pose_id]
             # Send next desired goal pose
             self.at_desired_goal_pose   = False
@@ -177,7 +177,6 @@ class DummyCV:
 
 if __name__ == '__main__':
     
-    dummy_cv = DummyCV('Path/collected_joint_list.npy')
     dummy_cv.do_stuff_with_recorded_poses()
     
     rospy.spin()

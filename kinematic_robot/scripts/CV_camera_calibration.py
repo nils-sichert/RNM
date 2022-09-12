@@ -2,7 +2,7 @@
 import os
 import sys
 import time
-
+import cv2
 import cv2 as cv
 import numpy as np
 import rospy
@@ -26,7 +26,7 @@ class CameraCalibration():
         # Path For Calibration Results
         self.result_path        = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_results')  
         # Path To Read-In Desired Joint List
-        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset001/collected_joint_list2.npy')  
+        self.joint_list_path    = os.path.join(os.path.dirname(__file__),'CV_camera_calibration_data/dataset002/collected_joint_list.npy')  
         # Joint State Topic
         self.joint_state_topic  = rospy.get_param('/joint_state_topic', '/joint_states')
         # Image topics
@@ -61,7 +61,7 @@ class CameraCalibration():
         # Setup Checkerboard Parameters
         self.criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)  # termination criteria
         self.chessboard_size = (8,5)  # Create chessboard and generate object points
-        self.square_size = 40 # Checkerboard Field Size in Millimeter
+        self.square_size = 0.04 # Checkerboard Field Size in Millimeter
 
         # Create Object Points in 3D Meshgrid Space And Covert Them In Desired Array Shape Like (0,0,0), (0,0,40), (0,0,80....
         self.objp = np.zeros((self.chessboard_size[0] * self.chessboard_size[1], 3), np.float32)
@@ -96,7 +96,27 @@ class CameraCalibration():
         rospy.logwarn("[CC] Waiting for image topics...")
         time.sleep(1)
 
+    def joint_to_dk_to_hm(self, joints, inv: bool):
+        """return R_mat, t_vec, pose_hm"""
+        temp = [0, 0, 0 ,1]
 
+        pose_list = self.kinematics.get_pose_from_angles(joints)
+        pose_3x4 = np.reshape(pose_list, (4,3)).T
+        pose_hm = np.r_[pose_3x4, np.reshape(temp, (1,4))]
+        if inv == True:
+            inv(pose_hm)
+        else:
+            R_mat = pose_hm[0:3, 0:3]
+            t_vec = pose_hm[0:3, 3:4]
+        return R_mat, t_vec, pose_hm
+
+    def rmat_tvec_to_hm(self, rmat, tvec):
+        """return pose_hm"""
+        temp = [0, 0, 0 ,1]
+
+        pose_3x4 = np.c_[rmat, np.reshape(tvec, (3,1))]
+        pose_hm = np.r_[pose_3x4, np.reshape(temp, (1,4))]
+        return pose_hm
 
     def joint_state_callback(self, joint_state : JointState):
         self.current_joint_state = joint_state.position
@@ -162,11 +182,8 @@ class CameraCalibration():
             
             # Get joint angles of this frame and calculate the pose to extract
             # Rotational matrix and translation vector
-           
-            current_pose = self.kinematics.get_pose_from_angles(self.current_joint_state)
-            current_pose = np.reshape(current_pose, (4,3)).T
-            R_gtb = current_pose[0:3, 0:3]
-            t_gtb = current_pose[0:3, 3:4]
+
+            R_gtb, t_gtb, pose_hm = self.joint_to_dk_to_hm(self.current_joint_state, False)
             self.R_gripper2base.append(R_gtb)
             self.t_gripper2base.append(t_gtb)
 
@@ -179,9 +196,9 @@ class CameraCalibration():
             It also calculates the extrinsic parameter between RGB and IR camera"""
 
         # Calibrate RGB Single Camera
-        ret_rgb, cameraMatrix_rgb, dist_rgb, rvecs_rgb, self.tvecs_rgb = cv.calibrateCamera(self.objpoints, self.imgpoints_rgb, self.frameSize_rgb, None, None, flags=cv.CALIB_RATIONAL_MODEL)
+        ret_rgb, cameraMatrix_rgb, dist_rgb, self.rvecs_rgb, self.tvecs_rgb = cv.calibrateCamera(self.objpoints, self.imgpoints_rgb, self.frameSize_rgb, None, None, flags=cv.CALIB_RATIONAL_MODEL)
         # Convert rvecs To Rotation Matrix For Hand In Eye
-        for rvec in rvecs_rgb:
+        for rvec in self.rvecs_rgb:
             rmat, jacobian = cv.Rodrigues(rvec)
             self.rmat_rgb.append(rmat) 
       
@@ -189,12 +206,9 @@ class CameraCalibration():
         ret_ir, cameraMatrix_ir, dist_ir, rvecs_ir, tvecs_ir = cv.calibrateCamera(self.objpoints, self.imgpoints_ir, self.frameSize_ir, None, None, flags=cv.CALIB_RATIONAL_MODEL)
 
         # Calibrate Stereo Camera: extrinsic parameters between RGB and IR camera
-        retStereo, cameraMatrix_stereo_rgb, dist_stereo_rgb, cameraMatrix_stereo_ir, dist_stereo_ir, self.rvec_stereo, self.tvec_stereo, essentialMatrix, fundamentalMatrix = cv.stereoCalibrate(self.objpoints, self.imgpoints_rgb, self.imgpoints_ir, cameraMatrix_rgb, dist_rgb, cameraMatrix_ir, dist_ir, None, flags = (cv.CALIB_FIX_INTRINSIC + cv.CALIB_RATIONAL_MODEL))
+        retStereo, cameraMatrix_stereo_rgb, dist_stereo_rgb, cameraMatrix_stereo_ir, dist_stereo_ir, self.rmat_stereo, self.tvec_stereo, essentialMatrix, fundamentalMatrix = cv.stereoCalibrate(self.objpoints, self.imgpoints_rgb, self.imgpoints_ir, cameraMatrix_rgb, dist_rgb, cameraMatrix_ir, dist_ir, None, flags = (cv.CALIB_FIX_INTRINSIC + cv.CALIB_RATIONAL_MODEL))
         rospy.logwarn("[CC] Calibrated RGB, IR and Stereo Camera successfully")
-        print(cameraMatrix_rgb)
-        print(dist_rgb)
-        print(cameraMatrix_ir)
-        print(dist_ir)
+        self.reprojection_error("RGB Camera", self.objpoints, self.imgpoints_rgb, self.rvecs_rgb, self.tvecs_rgb, cameraMatrix_rgb, dist_rgb)
         self.save_calibration_results()
         
 
@@ -203,8 +217,10 @@ class CameraCalibration():
         np.save(self.result_path + "/t_gripper2base.npy", self.t_gripper2base)
         np.save(self.result_path + "/rmat_rgb.npy", self.rmat_rgb)
         np.save(self.result_path + "/tvecs_rgb.npy", self.tvecs_rgb)
-        np.save(self.result_path + "/rvec_stereo.npy", self.rvec_stereo)
+        np.save(self.result_path + "/rvec_stereo.npy", self.rmat_stereo)
         np.save(self.result_path + "/tvec_stereo.npy", self.tvec_stereo)
+        np.save(self.result_path + "/HM_rgb2ir", self.rmat_tvec_to_hm(self.rmat_stereo, self.tvec_stereo))
+        np.save(self.result_path + "/HM_ir2rgb.npy", inv(self.rmat_tvec_to_hm(self.rmat_stereo, self.tvec_stereo)))
         rospy.logwarn(f"[CC] Saved calibration result in {self.result_path}")
 
     # PM communication
@@ -261,6 +277,16 @@ class CameraCalibration():
         msg.data = self.TASKFIN
         self.pub_task_finished.publish(msg)
         return
+
+    def reprojection_error(self, name : str, objpoints, imgpoints, rvecs, tvecs, cameraMatrix, dist):
+        # Reprojection Error
+        mean_error = 0
+
+        for i in range(len(objpoints)):
+            imgpoints2, _ = cv.projectPoints(objpoints[i], rvecs[i], tvecs[i], cameraMatrix, dist)
+            error = cv.norm(imgpoints[i], imgpoints2, cv.NORM_L2)/len(imgpoints2)
+            mean_error += error
+        rospy.logwarn(f"[CC] Mean_error (Norm L2) for {name} is: {mean_error}")
 
 
     def main_calibration(self):
